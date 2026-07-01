@@ -8,12 +8,9 @@ RUN npm run build
 
 FROM node:20-alpine
 
-# Install TeX Live (minimal + extras)
+# Install TeX Live (minimal)
 RUN apk add --no-cache \
-    texlive-latex-base \
-    texlive-latex-extra \
-    texlive-fonts-recommended \
-    texlive-science \
+    texlive \
     && rm -rf /var/cache/apk/*
 
 WORKDIR /app
