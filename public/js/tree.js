@@ -45,6 +45,20 @@ class FileTree {
     return root;
   }
 
+  buildPath(folderNode, allFiles) {
+    const folderName = folderNode.name;
+    for (const f of allFiles) {
+      if (f.path.includes(folderName + '/')) {
+        const parts = f.path.split('/');
+        const idx = parts.indexOf(folderName);
+        if (idx >= 0) {
+          return parts.slice(0, idx + 1).join('/');
+        }
+      }
+    }
+    return folderName;
+  },
+
   getFileIcon(name) {
     const ext = name.split('.').pop().toLowerCase();
     switch (ext) {
@@ -81,6 +95,32 @@ class FileTree {
             <button title="Delete" data-delete="${child.file.path}">${Icons.trash14}</button>
           </span>`;
 
+        // Drag & drop support
+        el.draggable = true;
+        el.dataset.path = child.file.path;
+        el.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', child.file.path);
+          e.dataTransfer.effectAllowed = 'move';
+          el.style.opacity = '0.5';
+        });
+        el.addEventListener('dragend', () => { el.style.opacity = '1'; });
+        el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.style.background = 'var(--accent)'; });
+        el.addEventListener('dragleave', () => { el.style.background = ''; });
+        el.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.style.background = '';
+          const oldPath = e.dataTransfer.getData('text/plain');
+          const targetPath = child.file.path;
+          if (oldPath === targetPath) return;
+          // Drop into folder: construct new path
+          const lastSlash = targetPath.lastIndexOf('/');
+          const dir = lastSlash >= 0 ? targetPath.substring(0, lastSlash + 1) : '';
+          const fileName = oldPath.split('/').pop();
+          const newPath = dir + fileName;
+          if (this.onRename) this.onRename(oldPath, newPath);
+        });
+
         // Thumbnail for images
         if (isImage && this.projectId) {
           const thumb = document.createElement('img');
@@ -103,6 +143,20 @@ class FileTree {
       } else {
         el.classList.add('folder');
         el.innerHTML = `${indent}<span class="icon">${Icons.folderOpen}</span><span class="name">${name}/</span>`;
+        // Drop on folders
+        el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.style.background = 'var(--accent)'; });
+        el.addEventListener('dragleave', () => { el.style.background = ''; });
+        el.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.style.background = '';
+          const oldPath = e.dataTransfer.getData('text/plain');
+          const fileName = oldPath.split('/').pop();
+          // Build folder path from tree
+          const folderPath = this.buildPath(child, this.files);
+          const newPath = folderPath ? folderPath + '/' + fileName : fileName;
+          if (this.onRename) this.onRename(oldPath, newPath);
+        });
       }
 
       parent.appendChild(el);

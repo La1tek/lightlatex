@@ -7,6 +7,7 @@ import { compileProject } from "../compiler/engine";
 import { p } from "../utils";
 import fs from "fs";
 import fsPromises from "fs/promises";
+import { createSnapshot } from "../storage/fs";
 
 const router = Router();
 router.use(authMiddleware);
@@ -21,6 +22,12 @@ router.post("/:id/compile", async (req: AuthRequest, res: Response) => {
     if (!project) return res.status(404).json({ error: "Project not found" });
 
     const result = await compileProject(project.id, project.mainFile || "main.tex", project.compiler || "pdflatex");
+
+    // Create snapshot on compile
+    if (result.success) {
+      try { await createSnapshot(project.id); } catch { /* snapshot best-effort */ }
+    }
+
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

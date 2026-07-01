@@ -221,6 +221,7 @@ const App = {
           <div class="editor-toolbar-right">
             <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
             <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
+            <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
             <button class="btn btn-secondary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
             <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
             <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} Download</button>
@@ -287,6 +288,7 @@ const App = {
       onSelect: (path) => this.openFile(path),
       onCreate: () => this.promptNewFile(),
       onDelete: (path) => this.deleteFile(path),
+      onRename: (oldPath, newPath) => this.renameFile(oldPath, newPath),
     });
     this.fileTree.setFiles(this.projectFiles);
 
@@ -347,6 +349,9 @@ const App = {
 
     // Cross-file search
     document.getElementById('search-btn').addEventListener('click', () => this.showSearchModal());
+
+    // History/diff viewer
+    document.getElementById('history-btn').addEventListener('click', () => this.showHistoryModal());
 
     // Spellchecker toggle
     let spellEnabled = false;
@@ -586,6 +591,109 @@ const App = {
       el.style.transition = 'opacity 0.3s';
       setTimeout(() => el.remove(), 300);
     }, 4000);
+  },
+
+  async renameFile(oldPath, newPath) {
+    try {
+      await api.put(`/projects/${this.currentProjectId}/files/rename`, { oldPath, newPath });
+      this.notify(`Renamed ${oldPath} → ${newPath}`, 'success');
+      this.projectFiles = await api.get(`/projects/${this.currentProjectId}/files`);
+      this.fileTree.setFiles(this.projectFiles);
+      if (Editor.currentFilePath === oldPath) {
+        this.openFile(newPath);
+      }
+    } catch (err) {
+      this.notify('Rename failed: ' + err.message, 'error');
+    }
+  },
+
+  async showHistoryModal() {
+    if (!Editor.currentFilePath) { this.notify('No file open', 'error'); return; }
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:900px">
+        <h2>File History: ${this.escapeHtml(Editor.currentFilePath)}</h2>
+        <div id="history-snapshots" style="margin-bottom:10px">
+          <p style="color:var(--text-secondary)">Loading snapshots...</p>
+        </div>
+        <div id="diff-container" style="height:400px;border:1px solid var(--border-color)"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="history-close">Close</button>
+          <button class="btn btn-primary" id="history-restore">Restore Selected Version</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#history-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    let selectedSnapshot = null;
+    const filePath = Editor.currentFilePath;
+
+    // Load snapshots
+    try {
+      const snapshots = await api.get(`/projects/${this.currentProjectId}/history`);
+      const snapshotsEl = document.getElementById('history-snapshots');
+      if (snapshots.length === 0) {
+        snapshotsEl.innerHTML = '<p style="color:var(--text-secondary)">No snapshots. Compile the project to create snapshots.</p>';
+      } else {
+        snapshotsEl.innerHTML = '<label style="color:var(--text-secondary)">Select snapshot: </label>' +
+          '<select id="history-select" style="background:var(--input-bg);color:var(--text-primary);border:1px solid var(--border-color);padding:4px;border-radius:4px">' +
+          snapshots.map(s => `<option value="${s}">${s.replace(/T/, ' ').replace(/-/g, ':').substring(0, 19)}</option>`).join('') +
+          '</select>';
+        document.getElementById('history-select').addEventListener('change', async (e) => {
+          selectedSnapshot = e.target.value;
+          await this.loadDiff(overlay, filePath, selectedSnapshot);
+        });
+        selectedSnapshot = snapshots[0];
+        await this.loadDiff(overlay, filePath, selectedSnapshot);
+      }
+    } catch (err) {
+      document.getElementById('history-snapshots').innerHTML = `<p style="color:var(--error)">Error: ${this.escapeHtml(err.message)}</p>`;
+    }
+
+    overlay.querySelector('#history-restore').addEventListener('click', async () => {
+      if (!selectedSnapshot) return;
+      try {
+        const headers = { 'Authorization': `Bearer ${api.token}` };
+        const res = await fetch(`/api/projects/${this.currentProjectId}/history/${selectedSnapshot}/files/${filePath}`, { headers });
+        const content = await res.text();
+        await api.put(`/projects/${this.currentProjectId}/files/${filePath}`, { content });
+        Editor.setValue(content);
+        this.notify('File restored from snapshot', 'success');
+        overlay.remove();
+      } catch (err) {
+        this.notify('Restore failed: ' + err.message, 'error');
+      }
+    });
+  },
+
+  async loadDiff(overlay, filePath, timestamp) {
+    const diffContainer = document.getElementById('diff-container');
+    if (!diffContainer) return;
+    try {
+      const headers = { 'Authorization': `Bearer ${api.token}` };
+      const [oldRes, newContent] = await Promise.all([
+        fetch(`/api/projects/${this.currentProjectId}/history/${timestamp}/files/${filePath}`, { headers }).then(r => r.text()),
+        Editor.getValue(),
+      ]);
+
+      // Create Monaco diff editor
+      require(['vs/editor/editor.main'], () => {
+        diffContainer.innerHTML = '';
+        monaco.editor.createDiffEditor(diffContainer, {
+          theme: document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'vs',
+          automaticLayout: true,
+          readOnly: true,
+        }).setModel({
+          original: monaco.editor.createModel(oldRes, 'latex'),
+          modified: monaco.editor.createModel(newContent, 'latex'),
+        });
+      });
+    } catch (err) {
+      diffContainer.innerHTML = `<div style="padding:20px;color:var(--error)">Could not load file for this snapshot</div>`;
+    }
   },
 
   escapeHtml(str) {

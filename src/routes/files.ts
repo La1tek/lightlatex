@@ -3,7 +3,7 @@ import { authMiddleware, AuthRequest } from "../auth/middleware";
 import { db } from "../db";
 import { projects, files } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, ensureDir, getProjectDir } from "../storage/fs";
+import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, ensureDir, getProjectDir, createSnapshot, listSnapshots, getSnapshotFile, renameFile } from "../storage/fs";
 import { p, pw } from "../utils";
 import multer from "multer";
 import fs from "fs/promises";
@@ -299,6 +299,53 @@ router.post("/:id/sync", async (req: AuthRequest, res: Response) => {
     res.json({ pushed, pulled, conflicts });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// ===== File rename =====
+router.put("/:id/files/rename", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    await verifyProject(id, req.userId!);
+    const { oldPath, newPath } = req.body;
+    if (!oldPath || !newPath) return res.status(400).json({ error: "oldPath and newPath required" });
+
+    await renameFile(id, oldPath, newPath);
+
+    // Update DB
+    await db.delete(files).where(and(eq(files.projectId, id), eq(files.path, oldPath)));
+    await db.insert(files).values({ projectId: id, path: newPath });
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ===== Snapshots / History =====
+router.get("/:id/history", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    await verifyProject(id, req.userId!);
+    const snapshots = await listSnapshots(id);
+    res.json(snapshots);
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+router.get("/:id/history/:timestamp/files/*", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    await verifyProject(id, req.userId!);
+    const timestamp = String(req.params.timestamp);
+    const filePath = pw(req);
+    if (!filePath) return res.status(400).json({ error: "File path required" });
+
+    const content = await getSnapshotFile(id, timestamp, filePath);
+    res.type("text/plain").send(content);
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
   }
 });
 

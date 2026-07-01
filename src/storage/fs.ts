@@ -107,3 +107,62 @@ export async function zipProject(projectId: string): Promise<Buffer> {
     archive.finalize();
   });
 }
+
+// ===== Snapshots =====
+export async function createSnapshot(projectId: string): Promise<string> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const snapshotsDir = path.join(getProjectDir(projectId), '.snapshots', timestamp);
+  const projectDir = getProjectDir(projectId);
+  await ensureDir(snapshotsDir);
+  const entries = await fs.promises.readdir(projectDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === '.snapshots' || entry.name === 'output.pdf' || entry.name === 'output.log') continue;
+    const src = path.join(projectDir, entry.name);
+    const dest = path.join(snapshotsDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirRecursive(src, dest);
+    } else {
+      await fs.promises.copyFile(src, dest);
+    }
+  }
+  return timestamp;
+}
+
+async function copyDirRecursive(src: string, dest: string) {
+  await fs.promises.mkdir(dest, { recursive: true });
+  const entries = await fs.promises.readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirRecursive(srcPath, destPath);
+    } else {
+      await fs.promises.copyFile(srcPath, destPath);
+    }
+  }
+}
+
+export async function listSnapshots(projectId: string): Promise<string[]> {
+  const snapshotsDir = path.join(getProjectDir(projectId), '.snapshots');
+  try {
+    const entries = await fs.promises.readdir(snapshotsDir);
+    return entries.sort().reverse();
+  } catch {
+    return [];
+  }
+}
+
+export async function getSnapshotFile(projectId: string, timestamp: string, filePath: string): Promise<string> {
+  const fullPath = path.join(getProjectDir(projectId), '.snapshots', timestamp, filePath);
+  return fs.promises.readFile(fullPath, 'utf-8');
+}
+
+export async function renameFile(projectId: string, oldPath: string, newPath: string): Promise<void> {
+  const oldFullPath = path.join(getProjectDir(projectId), oldPath);
+  const newFullPath = path.join(getProjectDir(projectId), newPath);
+  if (!oldFullPath.startsWith(getProjectDir(projectId)) || !newFullPath.startsWith(getProjectDir(projectId))) {
+    throw new Error("Invalid file path");
+  }
+  await ensureDir(path.dirname(newFullPath));
+  await fs.promises.rename(oldFullPath, newFullPath);
+}
