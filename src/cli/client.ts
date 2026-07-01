@@ -11,7 +11,7 @@ export class LightLatexClient {
     this.baseUrl = a.server_url.replace(/\/+$/, "");
   }
 
-  private async request(method: string, path: string, body?: any): Promise<any> {
+  async request(method: string, path: string, body?: any): Promise<any> {
     const url = `${this.baseUrl}/api${path}`;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.token}`,

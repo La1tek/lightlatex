@@ -8,6 +8,10 @@ import { sync } from "./commands/sync";
 import { watch } from "./commands/watch";
 import { compile } from "./commands/compile";
 import { status } from "./commands/status";
+import { openProject } from "./commands/open";
+import { templateList } from "./commands/template";
+import { templateApply } from "./commands/template_apply";
+import { diffSnapshots } from "./commands/diff";
 import { loadAuth } from "./config";
 
 const args = process.argv.slice(2);
@@ -52,16 +56,39 @@ async function main() {
       await status();
       break;
 
+    case "open":
+      await openProject();
+      break;
+
+    case "template":
+      if (args[1] === "list") {
+        await templateList();
+      } else if (args[1] === "apply" && args[2]) {
+        await templateApply(args[2]);
+      } else {
+        console.error("Usage: lightlatex template list|apply <name>");
+        process.exit(1);
+      }
+      break;
+
+    case "diff":
+      if (!args[1] || !args[2]) {
+        console.error("Usage: lightlatex diff <timestamp1> <timestamp2>");
+        process.exit(1);
+      }
+      await diffSnapshots(args[1], args[2]);
+      break;
+
     case "--version":
     case "-v":
-      console.log("lightlatex v0.4.0");
+      console.log("lightlatex v0.5.0");
       break;
 
     case "--help":
     case "-h":
     default:
       console.log(`
-LightTeX CLI v0.4.0 — LaTeX project sync & compile tool
+LightTeX CLI v0.5.0 — LaTeX project sync & compile tool
 
 Commands:
   login <url>      Log in to a LightTeX server
