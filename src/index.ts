@@ -8,6 +8,7 @@ import projectRoutes from "./routes/projects";
 import fileRoutes from "./routes/files";
 import compileRoutes from "./routes/compile";
 import templateRoutes from "./routes/templates";
+import adminRoutes from "./routes/admin";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3000", 10);
@@ -20,6 +21,7 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/templates", templateRoutes);
+app.use("/api/admin", adminRoutes);
 
 // File and compile routes (project-scoped)
 app.use("/api/projects", fileRoutes);
