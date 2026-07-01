@@ -249,7 +249,8 @@ const App = {
             <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
             <button class="btn btn-secondary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
             <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
-            <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} Download</button>
+            <button class="btn btn-secondary btn-small" id="download-pdf-btn" title="Download PDF">${Icons.download16} PDF</button>
+            <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} ZIP</button>
             <button class="btn btn-secondary btn-small" id="toggle-preview-btn" title="Toggle preview">${Icons.eye16} Preview</button>
             <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
             <button class="btn-icon" id="editor-logout-btn" title="Logout">${Icons.logout16}</button>
@@ -378,6 +379,7 @@ const App = {
     // Event handlers
     document.getElementById('compile-btn').addEventListener('click', () => this.compile());
     document.getElementById('download-btn').addEventListener('click', () => this.downloadProject());
+    document.getElementById('download-pdf-btn').addEventListener('click', () => this.downloadPdf());
     document.getElementById('toggle-preview-btn').addEventListener('click', () => this.togglePreview());
     document.getElementById('toggle-theme-btn').addEventListener('click', () => this.toggleTheme());
     document.getElementById('editor-logout-btn').addEventListener('click', () => {
@@ -626,6 +628,24 @@ const App = {
     const pane = document.getElementById('preview-pane');
     if (pane) {
       pane.classList.toggle('hidden', !this.previewVisible);
+    }
+  },
+
+  async downloadPdf() {
+    try {
+      const blob = await api.download(`/projects/${this.currentProjectId}/output.pdf`);
+      if (blob.size < 100) {
+        this.notify('No PDF yet. Compile first.', 'error');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'document.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      this.notify('Download failed: ' + err.message, 'error');
     }
   },
 
