@@ -6,7 +6,7 @@ import { writeFile } from "../storage/fs";
 import { p } from "../utils";
 
 const router = Router();
-router.use(authMiddleware);
+
 
 interface TemplateFile {
   path: string;

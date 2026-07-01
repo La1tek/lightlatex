@@ -82,6 +82,9 @@ function runCompiler(
   errors: CompileError[]
 ): Promise<{ success: boolean }> {
   return new Promise((resolve) => {
+    const texliveBin = "/usr/local/texlive/2026/bin/x86_64-linux";
+    const envPath = `${texliveBin}:${process.env.PATH}`;
+
     const proc = spawn(compiler, [
       "-interaction=nonstopmode",
       "-file-line-error",
@@ -89,6 +92,7 @@ function runCompiler(
     ], {
       cwd,
       timeout: 30000,
+      env: { ...process.env, PATH: envPath },
     });
 
     let stderr = "";
