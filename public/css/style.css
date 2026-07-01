@@ -666,3 +666,22 @@ body {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* ===== Status Bar ===== */
+.editor-statusbar {
+  height: 24px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* ===== Active buttons ===== */
+.btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}

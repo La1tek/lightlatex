@@ -222,6 +222,7 @@ const App = {
             <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
             <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
             <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
+            <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
             <button class="btn btn-secondary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
             <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
             <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} Download</button>
@@ -255,6 +256,7 @@ const App = {
             </div>
           </div>
         </div>
+        <div class="editor-statusbar" id="editor-statusbar"><span id="word-count"></span></div>
       </div>
     `;
 
@@ -352,6 +354,26 @@ const App = {
 
     // History/diff viewer
     document.getElementById('history-btn').addEventListener('click', () => this.showHistoryModal());
+
+    // Autocompile toggle
+    let autoCompileEnabled = false;
+    let autoCompileTimer = null;
+    document.getElementById('autocompile-btn').addEventListener('click', () => {
+      autoCompileEnabled = !autoCompileEnabled;
+      document.getElementById('autocompile-btn').classList.toggle('active', autoCompileEnabled);
+      this.notify(autoCompileEnabled ? 'Auto-compile ON (compiles 3s after save)' : 'Auto-compile OFF', 'info');
+    });
+
+    // Override autosave to trigger autocompile
+    const origAutosave = Editor.autosave.bind(Editor);
+    Editor.autosave = async () => {
+      await origAutosave();
+      this.updateWordCount();
+      if (autoCompileEnabled) {
+        clearTimeout(autoCompileTimer);
+        autoCompileTimer = setTimeout(() => this.compile(), 3000);
+      }
+    };
 
     // Spellchecker toggle
     let spellEnabled = false;
@@ -591,6 +613,22 @@ const App = {
       el.style.transition = 'opacity 0.3s';
       setTimeout(() => el.remove(), 300);
     }, 4000);
+  },
+
+  updateWordCount() {
+    const content = Editor.getValue();
+    const text = content
+      .replace(/\\\\[a-zA-Z]+/g, ' ')
+      .replace(/[%].*/g, '')
+      .replace(/[{}\\]/g, ' ')
+      .replace(/\\\\begin\\{[^}]*\\}/g, '')
+      .replace(/\\\\end\\{[^}]*\\}/g, '')
+      .replace(/\s+/g, ' ');
+    const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+    const chars = content.length;
+    const pages = Math.max(1, Math.round(words / 300));
+    const el = document.getElementById('word-count');
+    if (el) el.textContent = 'Words: ' + words + ' | Chars: ' + chars + ' | ~Pages: ' + pages;
   },
 
   async renameFile(oldPath, newPath) {
