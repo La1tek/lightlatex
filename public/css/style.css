@@ -685,3 +685,57 @@ body {
   color: #fff;
   border-color: var(--accent);
 }
+
+/* ===== Sidebar Tabs ===== */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 11px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.sidebar-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+.sidebar-panel {
+  font-size: 12px;
+}
+
+.panel-content {
+  padding: 4px 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.outline-item, .todo-item {
+  padding: 3px 10px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outline-item:hover, .todo-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.outline-item.section { padding-left: 10px; }
+.outline-item.subsection { padding-left: 20px; }
+.outline-item.subsubsection { padding-left: 30px; }
+.outline-item.chapter { padding-left: 10px; }
+
+.todo-item.warning { color: var(--warning); }
+.todo-item.error { color: var(--error); }

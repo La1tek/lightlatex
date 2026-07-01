@@ -33,7 +33,7 @@ const App = {
     const currentTheme = document.documentElement.dataset.theme;
 
     container.innerHTML = `
-      <div class="dashboard">
+      <div class="dashboard" id="dashboard-drop-zone">
         <div class="dashboard-header">
           <h1 class="brand">${Icons.logo} LightTeX</h1>
           <div class="dashboard-header-actions">
@@ -57,6 +57,30 @@ const App = {
       window.location.hash = '#/login';
     });
     document.getElementById('new-project-btn').addEventListener('click', () => this.showNewProjectModal());
+
+
+    // Drag & drop ZIP on dashboard for import
+    const dz = document.getElementById('dashboard-drop-zone');
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.style.outline = '3px dashed var(--accent)'; });
+    dz.addEventListener('dragleave', () => { dz.style.outline = ''; });
+    dz.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dz.style.outline = '';
+      const file = e.dataTransfer.files[0];
+      if (!file || !file.name.endsWith('.zip')) {
+        this.notify('Only .zip files supported for drag-drop import', 'error');
+        return;
+      }
+      try {
+        const name = file.name.replace('.zip', '');
+        const project = await api.post('/projects', { name });
+        await api.upload('/projects/' + project.id + '/upload', file);
+        this.notify('Imported ' + file.name + ' as project: ' + name, 'success');
+        this.showDashboard(container);
+      } catch (err) {
+        this.notify('Import failed: ' + err.message, 'error');
+      }
+    });
 
     try {
       const projects = await api.get('/projects');
@@ -237,7 +261,20 @@ const App = {
               <span>FILES</span>
               <button id="new-file-btn" title="New file">${Icons.plus16}</button>
             </div>
+            <div class="sidebar-tabs">
+              <button class="sidebar-tab active" data-tab="files">Files</button>
+              <button class="sidebar-tab" data-tab="outline">${Icons.outline16} Outline</button>
+              <button class="sidebar-tab" data-tab="todo">${Icons.todo16} TODO</button>
+            </div>
             <div class="tree-container" id="file-tree"></div>
+            <div class="sidebar-panel" id="outline-panel" style="display:none">
+              <div class="sidebar-header"><span>OUTLINE</span></div>
+              <div class="panel-content" id="outline-content"></div>
+            </div>
+            <div class="sidebar-panel" id="todo-panel" style="display:none">
+              <div class="sidebar-header"><span>TODO</span></div>
+              <div class="panel-content" id="todo-content"></div>
+            </div>
           </div>
           <div class="editor-pane">
             <div class="editor-container" id="monaco-editor"></div>
@@ -283,6 +320,22 @@ const App = {
     } catch {
       this.imageFiles = [];
     }
+
+    // Sidebar tabs
+    document.querySelectorAll('.sidebar-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const tabName = tab.dataset.tab;
+        document.getElementById('file-tree').style.display = tabName === 'files' ? '' : 'none';
+        document.getElementById('new-file-btn').style.display = tabName === 'files' ? '' : 'none';
+        document.querySelector('.sidebar-header').style.display = tabName === 'files' ? '' : 'none';
+        document.getElementById('outline-panel').style.display = tabName === 'outline' ? '' : 'none';
+        document.getElementById('todo-panel').style.display = tabName === 'todo' ? '' : 'none';
+        if (tabName === 'outline') this.parseOutline();
+        if (tabName === 'todo') this.parseTodos();
+      });
+    });
 
     // Init file tree
     this.fileTree = new FileTree(document.getElementById('file-tree'), {
@@ -613,6 +666,82 @@ const App = {
       el.style.transition = 'opacity 0.3s';
       setTimeout(() => el.remove(), 300);
     }, 4000);
+  },
+
+  async parseOutline() {
+    const outlineEl = document.getElementById('outline-content');
+    if (!outlineEl) return;
+    try {
+      const texFiles = this.projectFiles.filter(f => f.path.endsWith('.tex'));
+      let allContent = '';
+      for (const f of texFiles) {
+        try {
+          const headers = { 'Authorization': 'Bearer ' + api.token };
+          const content = await fetch('/api/projects/' + this.currentProjectId + '/files/' + f.path, { headers }).then(r => r.text());
+          allContent += content + '\n';
+        } catch { /* skip */ }
+      }
+      const items = [];
+      const regex = /\\((?:section|subsection|subsubsection|chapter))\{([^}]*)\}/g;
+      let match;
+      while ((match = regex.exec(allContent)) !== null) {
+        items.push({ level: match[1], title: match[2], line: allContent.substring(0, match.index).split('\n').length });
+      }
+      if (items.length === 0) {
+        outlineEl.innerHTML = '<div style="padding:8px;color:var(--text-secondary)">No sections found</div>';
+      } else {
+        outlineEl.innerHTML = items.map(i =>
+          '<div class="outline-item ' + i.level + '" data-line="' + i.line + '">' + this.escapeHtml(i.title) + '</div>'
+        ).join('');
+        outlineEl.querySelectorAll('.outline-item').forEach(el => {
+          el.addEventListener('click', () => {
+            Editor.revealLine(parseInt(el.dataset.line));
+          });
+        });
+      }
+    } catch (err) {
+      outlineEl.innerHTML = '<div style="padding:8px;color:var(--error)">Error parsing outline</div>';
+    }
+  },
+
+  async parseTodos() {
+    const todoEl = document.getElementById('todo-content');
+    if (!todoEl) return;
+    try {
+      const texFiles = this.projectFiles.filter(f => f.path.endsWith('.tex'));
+      const items = [];
+      for (const f of texFiles) {
+        try {
+          const headers = { 'Authorization': 'Bearer ' + api.token };
+          const content = await fetch('/api/projects/' + this.currentProjectId + '/files/' + f.path, { headers }).then(r => r.text());
+          const lines = content.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            const match = lines[i].match(/%(TODO|FIXME|HACK)\s*(.*)/i);
+            if (match) {
+              const type = match[1].toUpperCase();
+              items.push({ type, text: match[2], file: f.path, line: i + 1 });
+            }
+          }
+        } catch { /* skip */ }
+      }
+      if (items.length === 0) {
+        todoEl.innerHTML = '<div style="padding:8px;color:var(--text-secondary)">No TODOs found</div>';
+      } else {
+        todoEl.innerHTML = items.map(i =>
+          '<div class="todo-item ' + (i.type === 'FIXME' ? 'error' : i.type === 'HACK' ? 'warning' : '') + '" data-file="' + this.escapeHtml(i.file) + '" data-line="' + i.line + '">' +
+          '<strong>[' + i.type + ']</strong> ' + this.escapeHtml(i.text || '(empty)') +
+          ' <span style="color:var(--text-secondary)">— ' + i.file + ':' + i.line + '</span></div>'
+        ).join('');
+        todoEl.querySelectorAll('.todo-item').forEach(el => {
+          el.addEventListener('click', () => {
+            this.openFile(el.dataset.file);
+            setTimeout(() => Editor.revealLine(parseInt(el.dataset.line)), 200);
+          });
+        });
+      }
+    } catch (err) {
+      todoEl.innerHTML = '<div style="padding:8px;color:var(--error)">Error parsing TODOs</div>';
+    }
   },
 
   updateWordCount() {
