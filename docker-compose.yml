@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  lightlatex:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://lightlatex:lighttex@postgres:5432/lightlatex
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - NODE_ENV=production
+      - PORT=3000
+      - PROJECTS_DIR=/app/data/projects
+    volumes:
+      - latex_projects:/app/data/projects
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=lightlatex
+      - POSTGRES_PASSWORD=lighttex
+      - POSTGRES_DB=lightlatex
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lightlatex"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  latex_projects:

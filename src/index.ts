@@ -1,0 +1,89 @@
+import express from "express";
+import path from "path";
+import { db } from "./db";
+
+// Routes
+import authRoutes from "./routes/auth";
+import projectRoutes from "./routes/projects";
+import fileRoutes from "./routes/files";
+import compileRoutes from "./routes/compile";
+import templateRoutes from "./routes/templates";
+
+const app = express();
+const PORT = parseInt(process.env.PORT || "3000", 10);
+
+// Middleware
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "..", "public")));
+
+// API routes
+app.use("/api/auth", authRoutes);
+app.use("/api/projects", projectRoutes);
+app.use("/api/templates", templateRoutes);
+
+// File and compile routes (project-scoped)
+app.use("/api/projects", fileRoutes);
+app.use("/api/projects", compileRoutes);
+
+// SPA fallback
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+});
+
+// Run migrations on startup
+async function bootstrap() {
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        name VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT now(),
+        last_login TIMESTAMPTZ
+      );
+      CREATE TABLE IF NOT EXISTS projects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        compiler VARCHAR(20) DEFAULT 'pdflatex',
+        main_file VARCHAR(255) DEFAULT 'main.tex',
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
+      CREATE TABLE IF NOT EXISTS files (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        path VARCHAR(500) NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now(),
+        UNIQUE(project_id, path)
+      );
+      CREATE INDEX IF NOT EXISTS idx_files_project ON files(project_id);
+      CREATE TABLE IF NOT EXISTS sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash VARCHAR(255) NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+    console.log("✅ Database tables ready");
+  } catch (err) {
+    console.error("❌ Failed to initialize database:", err);
+    process.exit(1);
+  }
+
+  // Ensure projects directory
+  const projectsDir = process.env.PROJECTS_DIR || "./data/projects";
+  const fs = await import("fs/promises");
+  await fs.mkdir(projectsDir, { recursive: true });
+
+  app.listen(PORT, () => {
+    console.log(`🚀 LightTeX v0.1 running on http://localhost:${PORT}`);
+  });
+}
+
+bootstrap();
