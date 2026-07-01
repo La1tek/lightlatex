@@ -4,6 +4,7 @@ class FileTree {
     this.onSelect = options.onSelect || (() => {});
     this.onCreate = options.onCreate || (() => {});
     this.onDelete = options.onDelete || (() => {});
+    this.projectId = options.projectId || null;
     this.files = [];
     this.selectedPath = null;
   }
@@ -44,8 +45,19 @@ class FileTree {
     return root;
   }
 
+  getFileIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    switch (ext) {
+      case 'tex': return Icons.fileTex;
+      case 'bib': return Icons.fileBib;
+      case 'sty': return Icons.fileSty;
+      case 'pdf': return Icons.filePdf;
+      case 'png': case 'jpg': case 'jpeg': case 'gif': case 'svg': return Icons.fileImage;
+      default: return Icons.file;
+    }
+  }
+
   renderTree(node, parent, depth) {
-    // Sort: folders first, then files, alphabetically
     const entries = Object.entries(node.children).sort(([aName, aNode], [bName, bNode]) => {
       if (aNode.file && !bNode.file) return 1;
       if (!aNode.file && bNode.file) return -1;
@@ -61,16 +73,23 @@ class FileTree {
 
       if (child.file) {
         const ext = name.split('.').pop().toLowerCase();
-        let icon = '📄';
-        if (ext === 'tex') icon = '📝';
-        else if (ext === 'bib') icon = '📚';
-        else if (ext === 'sty') icon = '⚙️';
-        else if (ext === 'pdf') icon = '📄';
+        const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext);
+        const icon = this.getFileIcon(name);
 
         el.innerHTML = `${indent}<span class="icon">${icon}</span><span class="name">${name}</span>
           <span class="file-actions">
-            <button title="Delete" data-delete="${child.file.path}">🗑️</button>
+            <button title="Delete" data-delete="${child.file.path}">${Icons.trash14}</button>
           </span>`;
+
+        // Thumbnail for images
+        if (isImage && this.projectId) {
+          const thumb = document.createElement('img');
+          thumb.className = 'file-thumbnail';
+          thumb.src = `/api/projects/${this.projectId}/files/${child.file.path}`;
+          thumb.loading = 'lazy';
+          thumb.onerror = () => thumb.remove();
+          el.appendChild(thumb);
+        }
 
         el.addEventListener('click', (e) => {
           if (e.target.closest('[data-delete]')) {
@@ -83,7 +102,7 @@ class FileTree {
         });
       } else {
         el.classList.add('folder');
-        el.innerHTML = `${indent}<span class="icon">📁</span><span class="name">${name}/</span>`;
+        el.innerHTML = `${indent}<span class="icon">${Icons.folderOpen}</span><span class="name">${name}/</span>`;
       }
 
       parent.appendChild(el);

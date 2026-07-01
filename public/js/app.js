@@ -4,13 +4,12 @@ const App = {
   projectFiles: [],
   isCompiling: false,
   previewVisible: true,
+  imageFiles: [],
 
   async init() {
-    // Theme from localStorage
     const theme = localStorage.getItem('theme') || 'dark';
     document.documentElement.dataset.theme = theme;
 
-    // Hash routing
     window.addEventListener('hashchange', () => this.route());
     this.route();
   },
@@ -31,19 +30,21 @@ const App = {
 
   // ===== Dashboard =====
   async showDashboard(container) {
+    const currentTheme = document.documentElement.dataset.theme;
+
     container.innerHTML = `
       <div class="dashboard">
         <div class="dashboard-header">
-          <h1>📝 LightTeX</h1>
+          <h1 class="brand">${Icons.logo} LightTeX</h1>
           <div class="dashboard-header-actions">
-            <button class="btn btn-secondary" id="toggle-theme-btn" title="Toggle theme">🌙</button>
-            <button class="btn btn-secondary" id="new-project-btn">+ New Project</button>
-            <button class="btn btn-secondary" id="logout-btn">Logout</button>
+            <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
+            <button class="btn btn-secondary" id="new-project-btn">${Icons.plus16} New Project</button>
+            <button class="btn-icon" id="logout-btn" title="Logout">${Icons.logout16}</button>
           </div>
         </div>
         <div class="dashboard-content" id="projects-list">
           <div class="empty-state">
-            <div class="icon">📝</div>
+            <div class="icon">${Icons.clock}</div>
             <p>Loading projects...</p>
           </div>
         </div>
@@ -64,7 +65,7 @@ const App = {
       if (projects.length === 0) {
         list.innerHTML = `
           <div class="empty-state">
-            <div class="icon">📂</div>
+            <div class="icon">${Icons.folderEmpty}</div>
             <p>No projects yet. Create your first one!</p>
           </div>
         `;
@@ -78,15 +79,18 @@ const App = {
         const card = document.createElement('div');
         card.className = 'project-card';
         card.innerHTML = `
-          <h3>${this.escapeHtml(p.name)}</h3>
+          <div class="project-card-header">
+            <span class="project-card-icon">${Icons.fileTex}</span>
+            <h3>${this.escapeHtml(p.name)}</h3>
+          </div>
           <div class="desc">${this.escapeHtml(p.description || 'No description')}</div>
           <div class="meta">
-            <span>🔧 ${p.compiler}</span>
+            <span>${Icons.wrench} ${p.compiler}</span>
             <span>${new Date(p.updatedAt).toLocaleDateString()}</span>
           </div>
           <div class="actions">
             <button class="btn btn-secondary btn-small" data-open="${p.id}">Open</button>
-            <button class="btn btn-danger btn-small" data-delete="${p.id}">Delete</button>
+            <button class="btn btn-danger btn-small" data-delete="${p.id}">${Icons.trash}</button>
           </div>
         `;
         card.querySelector('[data-open]').addEventListener('click', (e) => {
@@ -108,7 +112,7 @@ const App = {
     } catch (err) {
       document.getElementById('projects-list').innerHTML = `
         <div class="empty-state">
-          <div class="icon">❌</div>
+          <div class="icon">${Icons.xCircle}</div>
           <p>Failed to load projects: ${this.escapeHtml(err.message)}</p>
         </div>
       `;
@@ -141,16 +145,16 @@ const App = {
           <label>Template</label>
           <div class="template-selector">
             <div class="template-option selected" data-template="">
-              <span class="icon">📄</span>Empty
+              <span class="icon">${Icons.file}</span>Empty
             </div>
             <div class="template-option" data-template="article">
-              <span class="icon">📰</span>Article
+              <span class="icon">${Icons.templateArticle}</span>Article
             </div>
             <div class="template-option" data-template="book">
-              <span class="icon">📕</span>Book
+              <span class="icon">${Icons.templateBook}</span>Book
             </div>
             <div class="template-option" data-template="beamer">
-              <span class="icon">📊</span>Beamer
+              <span class="icon">${Icons.templateBeamer}</span>Beamer
             </div>
           </div>
         </div>
@@ -202,29 +206,32 @@ const App = {
     Editor.dispose();
     Preview.clear();
 
+    const currentTheme = document.documentElement.dataset.theme;
+
     container.innerHTML = `
       <div class="editor-layout">
         <div class="editor-toolbar">
           <div class="editor-toolbar-left">
-            <a href="#/" class="btn-icon" title="Back to dashboard">⬅</a>
+            <a href="#/" class="btn-icon" title="Back to dashboard">${Icons.backArrow16}</a>
             <span class="project-name" id="editor-project-name">Loading...</span>
           </div>
           <div class="editor-toolbar-center">
             <span class="compile-status" id="compile-status"></span>
           </div>
           <div class="editor-toolbar-right">
-            <button class="btn btn-secondary btn-small" id="compile-btn" title="Ctrl+S">▶ Compile</button>
-            <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">⬇ Download</button>
-            <button class="btn btn-secondary btn-small" id="toggle-preview-btn">👁 Preview</button>
-            <button class="btn btn-secondary btn-small" id="toggle-theme-btn" title="Toggle theme">🌙</button>
-            <button class="btn btn-secondary btn-small" id="editor-logout-btn">Logout</button>
+            <button class="btn btn-secondary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
+            <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
+            <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} Download</button>
+            <button class="btn btn-secondary btn-small" id="toggle-preview-btn" title="Toggle preview">${Icons.eye16} Preview</button>
+            <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
+            <button class="btn-icon" id="editor-logout-btn" title="Logout">${Icons.logout16}</button>
           </div>
         </div>
         <div class="editor-main">
           <div class="sidebar">
             <div class="sidebar-header">
               <span>FILES</span>
-              <button id="new-file-btn" title="New file">+</button>
+              <button id="new-file-btn" title="New file">${Icons.plus16}</button>
             </div>
             <div class="tree-container" id="file-tree"></div>
           </div>
@@ -234,10 +241,10 @@ const App = {
           <div class="preview-pane" id="preview-pane">
             <div class="preview-header">
               <span id="pdf-page-info">PDF Preview</span>
-              <div>
-                <button class="btn-icon" id="pdf-prev">◀</button>
+              <div class="preview-nav">
+                <button class="btn-icon" id="pdf-prev">${Icons.chevronLeft16}</button>
                 <span id="pdf-page-num"></span>
-                <button class="btn-icon" id="pdf-next">▶</button>
+                <button class="btn-icon" id="pdf-next">${Icons.chevronRight16}</button>
               </div>
             </div>
             <div class="preview-container" id="preview-container">
@@ -254,7 +261,7 @@ const App = {
       project = await api.get(`/projects/${projectId}`);
       document.getElementById('editor-project-name').textContent = project.name;
     } catch {
-      container.innerHTML = '<div class="empty-state"><div class="icon">❌</div><p>Project not found</p></div>';
+      container.innerHTML = `<div class="empty-state"><div class="icon">${Icons.xCircle}</div><p>Project not found</p></div>`;
       return;
     }
 
@@ -265,8 +272,16 @@ const App = {
       this.projectFiles = [];
     }
 
+    // Load image files list for autocompletion
+    try {
+      this.imageFiles = await api.get(`/projects/${projectId}/images`);
+    } catch {
+      this.imageFiles = [];
+    }
+
     // Init file tree
     this.fileTree = new FileTree(document.getElementById('file-tree'), {
+      projectId: projectId,
       onSelect: (path) => this.openFile(path),
       onCreate: () => this.promptNewFile(),
       onDelete: (path) => this.deleteFile(path),
@@ -284,8 +299,8 @@ const App = {
     const editorEl = document.getElementById('monaco-editor');
     Editor.init(editorEl, {
       value: '% Loading...',
+      imageFiles: this.imageFiles,
       onReady: () => {
-        // Re-open file after editor is ready
         if (this.fileTree.selectedPath) {
           this.openFile(this.fileTree.selectedPath);
         }
@@ -317,6 +332,29 @@ const App = {
     document.getElementById('pdf-prev').addEventListener('click', () => { Preview.prevPage(); this.updatePdfPageInfo(); });
     document.getElementById('pdf-next').addEventListener('click', () => { Preview.nextPage(); this.updatePdfPageInfo(); });
 
+    // Image upload button
+    const uploadImgBtn = document.getElementById('upload-image-btn');
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/png,image/jpeg,image/gif,image/svg+xml,application/pdf';
+    fileInput.multiple = true;
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+    uploadImgBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => this.uploadImages(fileInput.files));
+
+    // Drag & drop on editor pane
+    const editorPane = document.querySelector('.editor-pane');
+    editorPane.addEventListener('dragover', (e) => { e.preventDefault(); editorPane.classList.add('drag-over'); });
+    editorPane.addEventListener('dragleave', () => { editorPane.classList.remove('drag-over'); });
+    editorPane.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      editorPane.classList.remove('drag-over');
+      if (e.dataTransfer.files.length > 0) {
+        await this.uploadImages(e.dataTransfer.files);
+      }
+    });
+
     // Update project title on rename
     const nameEl = document.getElementById('editor-project-name');
     nameEl.contentEditable = true;
@@ -334,6 +372,41 @@ const App = {
     nameEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
     });
+  },
+
+  async uploadImages(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'application/pdf'];
+    for (const file of fileList) {
+      if (!allowed.includes(file.type)) {
+        this.notify(`Unsupported file type: ${file.name}`, 'error');
+        continue;
+      }
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+        const headers = { 'Authorization': `Bearer ${api.token}` };
+        const res = await fetch(`/api/projects/${this.currentProjectId}/upload-image`, {
+          method: 'POST',
+          headers,
+          body: formData,
+        });
+        const result = await res.json();
+        if (res.ok) {
+          this.notify(`Uploaded ${file.name}`, 'success');
+          // Reload files
+          this.projectFiles = await api.get(`/projects/${this.currentProjectId}/files`);
+          this.fileTree.setFiles(this.projectFiles);
+          // Reload image list
+          this.imageFiles = await api.get(`/projects/${this.currentProjectId}/images`);
+          Editor.setImageFiles(this.imageFiles);
+        } else {
+          this.notify(`Upload failed: ${result.error || file.name}`, 'error');
+        }
+      } catch (err) {
+        this.notify(`Upload error: ${err.message}`, 'error');
+      }
+    }
   },
 
   async openFile(path) {
@@ -400,11 +473,10 @@ const App = {
     this.isCompiling = true;
 
     const statusEl = document.getElementById('compile-status');
-    statusEl.textContent = '⏳ Compiling...';
+    statusEl.innerHTML = `${Icons.clock14} Compiling...`;
     statusEl.className = 'compile-status compiling';
 
     try {
-      // Save current file first
       if (Editor.currentFilePath) {
         await Editor.autosave();
       }
@@ -412,12 +484,12 @@ const App = {
       const result = await api.post(`/projects/${this.currentProjectId}/compile`);
 
       if (result.success && result.pdfGenerated) {
-        statusEl.textContent = '✅ Compiled';
+        statusEl.innerHTML = `${Icons.check14} Compiled`;
         statusEl.className = 'compile-status success';
         this.loadPdf();
         this.notify('Compilation successful!', 'success');
       } else {
-        statusEl.textContent = `❌ ${result.errors.length} error(s)`;
+        statusEl.innerHTML = `${Icons.xCircle14} ${result.errors.length} error(s)`;
         statusEl.className = 'compile-status error';
         if (result.errors.length > 0) {
           Editor.setCompileErrors(result.errors, Editor.currentFilePath);
@@ -428,11 +500,10 @@ const App = {
         }
       }
 
-      // Reload file list
       this.projectFiles = await api.get(`/projects/${this.currentProjectId}/files`);
       this.fileTree.setFiles(this.projectFiles);
     } catch (err) {
-      statusEl.textContent = '❌ Error';
+      statusEl.innerHTML = `${Icons.xCircle14} Error`;
       statusEl.className = 'compile-status error';
       this.notify('Compilation error: ' + err.message, 'error');
     } finally {
@@ -455,7 +526,7 @@ const App = {
     if (info && num) {
       const total = pdfDoc ? pdfDoc.numPages : 0;
       const current = total > 0 ? currentPage : 0;
-      info.textContent = total > 0 ? `PDF Preview` : 'PDF Preview';
+      info.textContent = 'PDF Preview';
       num.textContent = total > 0 ? `${current} / ${total}` : '';
     }
   },
@@ -489,7 +560,7 @@ const App = {
     localStorage.setItem('theme', next);
     Editor.setTheme(next);
     const btn = document.querySelector('#toggle-theme-btn');
-    if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
+    if (btn) btn.innerHTML = next === 'dark' ? Icons.moon16 : Icons.sun16;
   },
 
   notify(message, type = 'info') {
@@ -511,5 +582,4 @@ const App = {
   }
 };
 
-// Boot
 document.addEventListener('DOMContentLoaded', () => App.init());

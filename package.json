@@ -1,8 +1,11 @@
 {
   "name": "lightlatex",
-  "version": "0.1.0",
-  "description": "Lightweight self-hosted LaTeX web editor",
+  "version": "0.4.0",
+  "description": "Lightweight self-hosted LaTeX web editor with CLI sync",
   "main": "dist/index.js",
+  "bin": {
+    "lightlatex": "dist/cli/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "ts-node-dev --respawn src/index.ts",
@@ -21,6 +24,9 @@
     "uuid": "^11.0.3",
     "archiver": "^7.0.1",
     "extract-zip": "^2.0.1"
+  },
+  "optionalDependencies": {
+    "chokidar": "^3.6.0"
   },
   "devDependencies": {
     "@types/archiver": "^6.0.3",

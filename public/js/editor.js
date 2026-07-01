@@ -4,14 +4,13 @@ let currentProjectId = null;
 let currentFilePath = null;
 let autosaveTimer = null;
 let compileMarkers = [];
+let currentImageFiles = [];
 
 const Editor = {
   init(container, options = {}) {
     require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' } });
     require(['vs/editor/editor.main'], () => {
       monacoInstance = monaco;
-
-      // Register LaTeX language (if not built-in)
       this.registerLatexLanguage();
 
       editor = monaco.editor.create(container, {
@@ -61,12 +60,12 @@ const Editor = {
         }
       });
 
+      if (options.imageFiles) currentImageFiles = options.imageFiles;
       if (options.onReady) options.onReady();
     });
   },
 
   registerLatexLanguage() {
-    // Monaco has built-in latex support, but let's enhance it
     monaco.languages.registerCompletionItemProvider('latex', {
       triggerCharacters: ['\\', '{'],
       provideCompletionItems: (model, position) => {
@@ -91,9 +90,28 @@ const Editor = {
           { label: '\\cite{...}', kind: monaco.languages.CompletionItemKind.Snippet, insertText: '\\cite{$1}', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
         ];
 
+        // Add \includegraphics completions with image files
+        if (currentImageFiles.length > 0) {
+          for (const img of currentImageFiles) {
+            const name = img.name || img.path || img;
+            const path = img.path || name;
+            suggestions.push({
+              label: `\\includegraphics{${name}}`,
+              kind: monaco.languages.CompletionItemKind.Function,
+              insertText: `\\includegraphics{images/${name}}`,
+              detail: `Image: images/${name}`,
+              documentation: `Insert \\includegraphics{images/${name}}`,
+            });
+          }
+        }
+
         return { suggestions };
       }
     });
+  },
+
+  setImageFiles(files) {
+    currentImageFiles = files || [];
   },
 
   setValue(content) {
@@ -115,7 +133,6 @@ const Editor = {
     const model = editor.getModel();
     if (!model) return;
 
-    // Clear old markers
     monacoInstance.editor.setModelMarkers(model, 'latex-compile', []);
 
     const newMarkers = errors.map(e => ({

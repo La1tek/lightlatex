@@ -10,18 +10,21 @@ const Auth = {
     const page = document.getElementById('auth-page');
     page.innerHTML = `
       <div class="auth-card">
-        <h1>📝 LightTeX</h1>
+        <h1 class="brand">${Icons.logo} LightTeX</h1>
         <p class="subtitle">Lightweight LaTeX Editor</p>
         <h2>Sign In</h2>
         <div class="error-msg" id="auth-error"></div>
         <form id="login-form">
           <div class="form-group">
-            <label>Email</label>
+            <label>${Icons.email} Email</label>
             <input type="email" id="login-email" required placeholder="you@example.com" autocomplete="email">
           </div>
           <div class="form-group">
-            <label>Password</label>
-            <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password">
+            <label>${Icons.lock} Password</label>
+            <div class="password-field">
+              <input type="password" id="login-password" required placeholder="Min 6 characters" autocomplete="current-password">
+              <button type="button" class="btn-icon password-toggle" id="login-toggle-pw" title="Show password">${Icons.eye}</button>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary">Sign In</button>
         </form>
@@ -30,6 +33,8 @@ const Auth = {
         </div>
       </div>
     `;
+
+    this.setupPasswordToggle('login-password', 'login-toggle-pw');
 
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -52,22 +57,25 @@ const Auth = {
     const page = document.getElementById('auth-page');
     page.innerHTML = `
       <div class="auth-card">
-        <h1>📝 LightTeX</h1>
+        <h1 class="brand">${Icons.logo} LightTeX</h1>
         <p class="subtitle">Lightweight LaTeX Editor</p>
         <h2>Create Account</h2>
         <div class="error-msg" id="auth-error"></div>
         <form id="register-form">
           <div class="form-group">
-            <label>Name (optional)</label>
+            <label>${Icons.user} Name (optional)</label>
             <input type="text" id="reg-name" placeholder="Your name" autocomplete="name">
           </div>
           <div class="form-group">
-            <label>Email</label>
+            <label>${Icons.email} Email</label>
             <input type="email" id="reg-email" required placeholder="you@example.com" autocomplete="email">
           </div>
           <div class="form-group">
-            <label>Password</label>
-            <input type="password" id="reg-password" required placeholder="Min 6 characters" autocomplete="new-password">
+            <label>${Icons.lock} Password</label>
+            <div class="password-field">
+              <input type="password" id="reg-password" required placeholder="Min 6 characters" autocomplete="new-password">
+              <button type="button" class="btn-icon password-toggle" id="reg-toggle-pw" title="Show password">${Icons.eye}</button>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary">Create Account</button>
         </form>
@@ -76,6 +84,8 @@ const Auth = {
         </div>
       </div>
     `;
+
+    this.setupPasswordToggle('reg-password', 'reg-toggle-pw');
 
     document.getElementById('register-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -93,5 +103,17 @@ const Auth = {
     });
 
     document.getElementById('show-login').addEventListener('click', () => this.renderLogin());
+  },
+
+  setupPasswordToggle(inputId, toggleId) {
+    const input = document.getElementById(inputId);
+    const toggle = document.getElementById(toggleId);
+    let visible = false;
+    toggle.addEventListener('click', () => {
+      visible = !visible;
+      input.type = visible ? 'text' : 'password';
+      toggle.innerHTML = visible ? Icons.eyeOff : Icons.eye;
+      toggle.title = visible ? 'Hide password' : 'Show password';
+    });
   }
 };

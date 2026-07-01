@@ -212,7 +212,29 @@ body {
 .dashboard-header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.dashboard-header-actions .btn svg,
+.dashboard-header-actions .btn-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.editor-toolbar-right .btn svg,
+.editor-toolbar-right .btn-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.editor-toolbar-left .btn-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sidebar-header button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .dashboard-content {
@@ -537,6 +559,91 @@ body {
 
 .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 .empty-state p { font-size: 15px; }
+
+/* Password field with toggle */
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 40px;
+}
+.password-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.password-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Brand with icon */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Project card header */
+.project-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.project-card-header svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+/* Drag over */
+.editor-pane.drag-over {
+  background: var(--accent);
+  opacity: 0.1;
+}
+.editor-pane.drag-over::after {
+  content: 'Drop images here';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  color: var(--accent);
+  z-index: 10;
+}
+.editor-pane {
+  position: relative;
+}
+
+/* Preview nav */
+.preview-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Image thumbnail in file tree */
+.file-thumbnail {
+  width: 16px;
+  height: 16px;
+  object-fit: cover;
+  border-radius: 2px;
+  margin-left: auto;
+  opacity: 0.7;
+}
+
+/* Tree icon SVG sizing */
+.tree-item .icon svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
 
 /* ===== Notification ===== */
 .notification {
