@@ -196,6 +196,122 @@ const Editor = {
     currentFilePath = filePath;
   },
 
+  revealLine(line) {
+    if (editor) {
+      editor.revealLineInCenter(line);
+      editor.setPosition({ lineNumber: line, column: 1 });
+      editor.focus();
+    }
+  },
+
+  toggleSpellcheck(enable) {
+    if (!editor || !monacoInstance) return;
+    const model = editor.getModel();
+    if (!model) return;
+    monacoInstance.editor.setModelMarkers(model, 'spellcheck', []);
+    if (!enable) return;
+
+    // Common English words + LaTeX commands dictionary
+    const knownWords = new Set([
+      // Common LaTeX commands
+      'documentclass','usepackage','begin','end','section','subsection','subsubsection',
+      'chapter','paragraph','textbf','textit','texttt','emph','underline','cite','ref',
+      'label','includegraphics','caption','centering','item','input','include','bibliography',
+      'bibliographystyle','title','author','date','maketitle','tableofcontents','pagebreak',
+      'newpage','footnote','marginnote','marginpar','abstract','appendix','toc',
+      'equation','align','figure','table','tabular','minipage','float','hline',
+      'toprule','midrule','bottomrule','multicolumn','cline','ldots','dots',
+      'frac','sqrt','int','sum','prod','lim','inf','sup','alpha','beta','gamma',
+      'delta','epsilon','theta','lambda','mu','sigma','omega','pi','phi','psi',
+      'nu','rho','tau','zeta','eta','chi','xi','kappa','iota','upsilon',
+      'left','right','bigl','bigr','leftarrow','rightarrow','leftrightarrow',
+      'Rightarrow','Leftrightarrow','leq','geq','neq','approx','equiv',
+      'infty','partial','nabla','prime','vec','hat','bar','dot','tilde',
+      'widehat','widetilde','overline','underline','mathbb','mathcal','mathrm',
+      'text','mathrm','mathbf','mathit','mathsf','mathtt','mathfrak',
+      'quad','qquad','space','hspace','vspace','newline','linebreak',
+      'noindent','par','indent','setlength','pagestyle','thispagestyle',
+      'addbibresource','printbibliography','autocite','parencite','textcite',
+      'def','newcommand','renewcommand','newenvironment','ifthenelse',
+      'foreach','forloop','while','do','fi','od','then','else','or',
+      'and','not','true','false','the','a','an','is','are','was','were',
+      'be','been','being','have','has','had','do','does','did','will',
+      'would','could','should','may','might','shall','can','need','dare',
+      'ought','used','it','its','he','she','they','them','their','his','her',
+      'we','you','your','my','our','this','that','these','those','which',
+      'what','when','where','how','who','whom','whose','all','each','every',
+      'both','few','more','most','other','some','such','no','not','only',
+      'same','so','than','too','very','just','because','but','however',
+      'therefore','thus','hence','moreover','furthermore','nevertheless',
+      'meanwhile','addition','example','instance','case','result','method',
+      'model','approach','problem','solution','analysis','data','study',
+      'experiment','figure','table','section','paper','work','show',
+      'shows','shown','given','using','used','based','according','proposed',
+      'well','also','new','first','two','one','three','second','third',
+      'time','number','part','point','fact','general','different','between',
+      'from','into','through','during','before','after','above','below',
+      'up','down','out','over','under','again','further','once','here',
+      'information','system','systems','algorithm','algorithms','function',
+      'functions','theory','results','performance','evaluation','application',
+      'applications','language','languages','process','processes','value',
+      'values','set','sets','order','sequence','distribution','probability',
+      'estimate','error','errors','test','tests','training','learning',
+      'network','networks','input','output','layer','layers','feature',
+      'features','vector','matrix','parameters','parameter','optimization',
+      'gradient','loss','accuracy','precision','recall','baseline',
+      'comparison','compared','significant','significantly','respectively',
+      'specifically','particular','previous','prior','following','consider',
+      'defined','definition','denote','denoted','assume','assumption',
+      'let','denotes','denote','where','obtain','obtained','observe',
+      'observed','compute','computed','provide','provides','provided',
+      'corresponding','related','regarding','related','proposed','recent',
+      'state','art','framework','based','design','implemented','implementation',
+      'which','with','for','in','on','at','by','to','of','as','if','then',
+      'else','and','or','the','a','an','this','that','is','are','was',
+      'were','be','been','have','has','had','it','its','we','our','can',
+      'may','will','shall','not','no','nor','but','yet','however',
+      'although','though','even','still','while','because','since',
+      'therefore','thus','hence','so','such','than','more','most',
+      'very','too','also','only','just','well','then','now','here',
+      'when','where','how','what','which','who','whom','whose',
+    ].map(w => w.toLowerCase()));
+
+    const content = model.getValue();
+    const lines = content.split('\n');
+    const decorations: Array<{ range: any; options: any }> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Skip lines starting with \ (LaTeX commands)
+      const trimmed = line.trim();
+      if (trimmed.startsWith('\\') || trimmed.startsWith('%')) continue;
+
+      // Extract words (alpha only, min 3 chars)
+      const words = line.match(/[a-zA-Z]{3,}/g) || [];
+      for (const word of words) {
+        if (!knownWords.has(word.toLowerCase())) {
+          const idx = line.indexOf(word);
+          decorations.push({
+            range: new monacoInstance.Range(i + 1, idx + 1, i + 1, idx + word.length + 1),
+            options: {
+              inlineClassName: 'spellcheck-error',
+            }
+          });
+        }
+      }
+    }
+
+    // Inject CSS if not exists
+    if (!document.getElementById('spellcheck-style')) {
+      const style = document.createElement('style');
+      style.id = 'spellcheck-style';
+      style.textContent = '.spellcheck-error { text-decoration: wavy underline red; }';
+      document.head.appendChild(style);
+    }
+
+    editor.createDecorationsCollection(decorations);
+  },
+
   dispose() {
     if (editor) {
       editor.dispose();

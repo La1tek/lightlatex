@@ -219,6 +219,8 @@ const App = {
             <span class="compile-status" id="compile-status"></span>
           </div>
           <div class="editor-toolbar-right">
+            <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
+            <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
             <button class="btn btn-secondary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
             <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
             <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} Download</button>
@@ -342,6 +344,17 @@ const App = {
     document.body.appendChild(fileInput);
     uploadImgBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => this.uploadImages(fileInput.files));
+
+    // Cross-file search
+    document.getElementById('search-btn').addEventListener('click', () => this.showSearchModal());
+
+    // Spellchecker toggle
+    let spellEnabled = false;
+    document.getElementById('spellcheck-btn').addEventListener('click', () => {
+      spellEnabled = !spellEnabled;
+      document.getElementById('spellcheck-btn').classList.toggle('active', spellEnabled);
+      Editor.toggleSpellcheck(spellEnabled);
+    });
 
     // Drag & drop on editor pane
     const editorPane = document.querySelector('.editor-pane');
@@ -579,6 +592,64 @@ const App = {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  },
+
+  async showSearchModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:700px">
+        <h2>Search in Project</h2>
+        <div class="form-group">
+          <input type="text" id="search-input" placeholder="Search across all files..." autofocus style="width:100%">
+        </div>
+        <div id="search-results" style="max-height:400px;overflow-y:auto;font-size:13px;font-family:monospace"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="search-close">Close</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#search-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.remove(); });
+
+    let searchTimer;
+    document.getElementById('search-input').addEventListener('input', (e) => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(async () => {
+        const q = e.target.value.trim();
+        const resultsEl = document.getElementById('search-results');
+        if (!q) { resultsEl.innerHTML = ''; return; }
+        try {
+          const results = await api.get(`/projects/${this.currentProjectId}/search?q=${encodeURIComponent(q)}`);
+          if (results.length === 0) {
+            resultsEl.innerHTML = '<div style="padding:10px;color:var(--text-secondary)">No results</div>';
+          } else {
+            resultsEl.innerHTML = results.map(r =>
+              `<div class="search-result-item" data-file="${this.escapeHtml(r.file)}" data-line="${r.line}">
+                <span style="color:var(--accent)">${this.escapeHtml(r.file)}</span>:<span style="color:var(--warning)">${r.line}</span>: ${this.escapeHtml(r.content)}
+              </div>`
+            ).join('');
+            resultsEl.querySelectorAll('.search-result-item').forEach(el => {
+              el.addEventListener('click', () => {
+                const file = el.dataset.file;
+                const line = parseInt(el.dataset.line);
+                this.openFile(file);
+                setTimeout(() => Editor.revealLine(line), 200);
+                overlay.remove();
+              });
+              el.style.cursor = 'pointer';
+              el.style.padding = '4px 8px';
+              el.style.borderBottom = '1px solid var(--border-color)';
+            });
+          }
+        } catch (err) {
+          resultsEl.innerHTML = `<div style="padding:10px;color:var(--error)">Error: ${this.escapeHtml(err.message)}</div>`;
+        }
+      }, 300);
+    });
+    document.getElementById('search-input').focus();
   }
 };
 

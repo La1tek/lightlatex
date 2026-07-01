@@ -1,9 +1,9 @@
 import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
 import { db } from "../db";
-import { projects } from "../db/schema";
+import { projects, files } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { ensureProjectDir, removeProjectDir, writeFile } from "../storage/fs";
+import { ensureProjectDir, removeProjectDir, writeFile, readFile, getProjectDir } from "../storage/fs";
 import { applyTemplate } from "./templates";
 import { p } from "../utils";
 
@@ -77,6 +77,44 @@ router.delete("/:id", async (req: AuthRequest, res: Response) => {
   await db.delete(projects).where(eq(projects.id, id));
   await removeProjectDir(id);
   res.json({ ok: true });
+});
+
+// Cross-file search
+router.get("/:id/search", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    const q = (req.query.q as string || "").trim();
+    if (!q) return res.status(400).json({ error: "Query required" });
+
+    const [project] = await db.select().from(projects)
+      .where(and(eq(projects.id, id), eq(projects.userId, req.userId!))).limit(1);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    const fileList = await db.select().from(files).where(eq(files.projectId, id));
+    const results: Array<{ file: string; line: number; content: string }> = [];
+
+    for (const f of fileList) {
+      const ext = f.path.split(".").pop()?.toLowerCase();
+      if (["png", "jpg", "jpeg", "gif", "svg", "pdf", "zip"].includes(ext || "")) continue;
+
+      try {
+        const content = await readFile(id, f.path);
+        const lines = content.split("\n");
+        const lowerQ = q.toLowerCase();
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].toLowerCase().includes(lowerQ)) {
+            results.push({ file: f.path, line: i + 1, content: lines[i].trim() });
+            if (results.length >= 200) break;
+          }
+        }
+        if (results.length >= 200) break;
+      } catch { /* skip unreadable */ }
+    }
+
+    res.json(results);
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
 });
 
 export default router;
