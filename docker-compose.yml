@@ -13,6 +13,7 @@ services:
       - PROJECTS_DIR=/app/data/projects
     volumes:
       - latex_projects:/app/data/projects
+      - texlive-full:/usr/local/texlive:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,3 +37,5 @@ services:
 volumes:
   postgres_data:
   latex_projects:
+  texlive-full:
+    external: true

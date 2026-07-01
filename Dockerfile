@@ -8,11 +8,6 @@ RUN npm run build
 
 FROM node:20-alpine
 
-# Install TeX Live (minimal)
-RUN apk add --no-cache \
-    texlive \
-    && rm -rf /var/cache/apk/*
-
 WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
@@ -21,6 +16,10 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/src/templates ./src/templates
 
 RUN mkdir -p /app/data/projects
+
+# TeX Live mounted from host (sharelatex container volume)
+ENV PATH="/usr/local/texlive/2026/bin/x86_64-linux:${PATH}"
+ENV TEXMFHOME="/app/data/texmf"
 
 EXPOSE 3000
 ENV NODE_ENV=production
