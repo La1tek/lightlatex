@@ -65,6 +65,13 @@ const Preview = {
     }
   },
 
+  goToPage(page) {
+    if (pdfDoc && page >= 1 && page <= pdfDoc.numPages) {
+      currentPage = page;
+      this.renderCurrentPage();
+    }
+  },
+
   clear() {
     pdfDoc = null;
     if (pdfCanvas) {
