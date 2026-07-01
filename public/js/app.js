@@ -369,11 +369,8 @@ const App = {
 
     // Init preview
     const previewContainer = document.getElementById('preview-container');
-    const canvas = document.createElement('canvas');
-    canvas.id = 'pdf-canvas';
     previewContainer.innerHTML = '';
-    previewContainer.appendChild(canvas);
-    Preview.init(canvas);
+    Preview.init(previewContainer);
 
     // Load existing PDF
     this.loadPdf();

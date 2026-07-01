@@ -525,16 +525,33 @@ body {
 
 .preview-container {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
   background: #525659;
-  display: flex;
-  justify-content: center;
   padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
-.preview-container canvas {
-  max-width: 100%;
+.pdf-page-wrapper {
+  background: white;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.pdf-page-canvas {
+  display: block;
+  max-width: 100%;
+}
+
+.pdf-page-label {
+  font-size: 11px;
+  color: #999;
+  padding: 4px 0;
 }
 
 .preview-placeholder {
