@@ -57,7 +57,7 @@ class FileTree {
       }
     }
     return folderName;
-  },
+  }
 
   getFileIcon(name) {
     const ext = name.split('.').pop().toLowerCase();

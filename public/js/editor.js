@@ -278,7 +278,7 @@ const Editor = {
 
     const content = model.getValue();
     const lines = content.split('\n');
-    const decorations: Array<{ range: any; options: any }> = [];
+    const decorations = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
