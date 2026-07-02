@@ -18,6 +18,7 @@ const Admin = {
           <h1 class="brand">${Icons.logo} LightTeX</h1>
           <nav>
             <a class="active" href="#overview">Overview</a>
+            <a href="#health">Health</a>
             <a href="#users">Users</a>
             <a href="#backups">Backups</a>
             <a href="#settings">Settings</a>
@@ -35,6 +36,13 @@ const Admin = {
             <section class="admin-section" id="overview">
               <h2>Overview</h2>
               <div id="admin-stats" class="stats-grid"><div class="empty-state"><p>Loading...</p></div></div>
+            </section>
+            <section class="admin-section" id="health">
+              <div class="section-heading-row">
+                <h2>Health</h2>
+                <button class="btn btn-secondary btn-small" id="health-refresh">${Icons.clock14} Refresh</button>
+              </div>
+              <div id="admin-health"><div class="empty-state"><p>Loading...</p></div></div>
             </section>
             <section class="admin-section" id="users">
               <h2>Users</h2>
@@ -65,6 +73,7 @@ const Admin = {
     });
 
     document.getElementById('backup-btn').addEventListener('click', () => this.backup());
+    document.getElementById('health-refresh').addEventListener('click', () => this.loadHealth());
     document.getElementById('restore-btn').addEventListener('click', () => {
       document.getElementById('restore-file').click();
     });
@@ -93,7 +102,14 @@ const Admin = {
     });
 
     await this.loadStats();
+    await this.loadHealth();
     await this.loadUsers();
+  },
+
+  escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
   },
 
   async loadStats() {
@@ -176,6 +192,71 @@ const Admin = {
       });
     } catch (err) {
       el.innerHTML = `<div style="color:var(--error)">Failed: ${err.message}</div>`;
+    }
+  },
+
+  async loadHealth() {
+    const el = document.getElementById('admin-health');
+    try {
+      const health = await api.get('/admin/health');
+      if (health.error) {
+        el.innerHTML = `<div class="empty-state"><p>${this.escapeHtml(health.error)}</p></div>`;
+        return;
+      }
+      const statusClass = health.status === 'ok' ? 'success' : health.status === 'warning' ? 'warning' : 'error';
+      el.innerHTML = `
+        <div class="health-header-card ${statusClass}">
+          <div>
+            <strong>${this.escapeHtml(health.status.toUpperCase())}</strong>
+            <span>Latency ${health.latencyMs}ms · Uptime ${Math.round(health.uptimeSec / 60)}m · v${this.escapeHtml(health.version)}</span>
+          </div>
+          <span>${this.escapeHtml(new Date().toLocaleString())}</span>
+        </div>
+        <div class="admin-health-grid">
+          <section>
+            <h3>Service Checks</h3>
+            ${health.checks.map((check) => `
+              <div class="health-row ${check.status}">
+                <span>${this.escapeHtml(check.name)}</span>
+                <strong>${this.escapeHtml(check.status)}</strong>
+                <small>${this.escapeHtml(check.detail)}</small>
+              </div>
+            `).join('')}
+          </section>
+          <section>
+            <h3>Compilers</h3>
+            ${health.compilers.map((item) => `
+              <div class="health-row ${item.status}">
+                <span>${this.escapeHtml(item.compiler)}</span>
+                <strong>${this.escapeHtml(item.status)}</strong>
+                <small>${this.escapeHtml(item.path)}</small>
+              </div>
+            `).join('')}
+          </section>
+          <section>
+            <h3>Quotas</h3>
+            ${Object.entries(health.quotas).map(([key, value]) => `
+              <div class="health-row">
+                <span>${this.escapeHtml(key)}</span>
+                <strong>${this.escapeHtml(value)}</strong>
+                <small>environment</small>
+              </div>
+            `).join('')}
+          </section>
+          <section>
+            <h3>Inventory</h3>
+            ${Object.entries(health.metrics).map(([key, value]) => `
+              <div class="health-row">
+                <span>${this.escapeHtml(key)}</span>
+                <strong>${this.escapeHtml(value)}</strong>
+                <small>current</small>
+              </div>
+            `).join('')}
+          </section>
+        </div>
+      `;
+    } catch (err) {
+      el.innerHTML = `<div style="color:var(--error)">Failed to load health: ${this.escapeHtml(err.message)}</div>`;
     }
   },
 
