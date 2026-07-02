@@ -341,12 +341,17 @@ const App = {
             <div class="sidebar-tabs">
               <button class="sidebar-tab active" data-tab="files">Files</button>
               <button class="sidebar-tab" data-tab="outline">${Icons.outline16} Outline</button>
+              <button class="sidebar-tab" data-tab="refs">${Icons.link16} Refs</button>
               <button class="sidebar-tab" data-tab="todo">${Icons.todo16} TODO</button>
             </div>
             <div class="tree-container" id="file-tree"></div>
             <div class="sidebar-panel" id="outline-panel" style="display:none">
               <div class="sidebar-header"><span>OUTLINE</span></div>
               <div class="panel-content" id="outline-content"></div>
+            </div>
+            <div class="sidebar-panel" id="refs-panel" style="display:none">
+              <div class="sidebar-header"><span>REFERENCES</span></div>
+              <div class="panel-content" id="refs-content"></div>
             </div>
             <div class="sidebar-panel" id="todo-panel" style="display:none">
               <div class="sidebar-header"><span>TODO</span></div>
@@ -429,8 +434,10 @@ const App = {
         document.getElementById('new-file-btn').style.display = tabName === 'files' ? '' : 'none';
         document.querySelector('.sidebar-header').style.display = tabName === 'files' ? '' : 'none';
         document.getElementById('outline-panel').style.display = tabName === 'outline' ? '' : 'none';
+        document.getElementById('refs-panel').style.display = tabName === 'refs' ? '' : 'none';
         document.getElementById('todo-panel').style.display = tabName === 'todo' ? '' : 'none';
         if (tabName === 'outline') this.parseOutline();
+        if (tabName === 'refs') this.parseReferences();
         if (tabName === 'todo') this.parseTodos();
       });
     });
@@ -1128,6 +1135,7 @@ const App = {
   refreshActiveSidebarPanel() {
     const tab = this.getActiveSidebarTab();
     if (tab === 'outline') this.parseOutline();
+    if (tab === 'refs') this.parseReferences();
     if (tab === 'todo') this.parseTodos();
   },
 
@@ -1222,6 +1230,7 @@ const App = {
       environments: [],
       citations: [],
       refs: [],
+      bibEntries: [],
       todos: [],
       filesRead: 0,
     };
@@ -1240,6 +1249,19 @@ const App = {
         const rawLine = lines[index];
         const line = this.stripLatexComment(rawLine);
         const lineNumber = index + 1;
+
+        if (file.path.endsWith('.bib')) {
+          const bibRegex = /@\w+\s*\{\s*([^,\s]+)\s*,/g;
+          let bibMatch;
+          while ((bibMatch = bibRegex.exec(line)) !== null) {
+            structure.bibEntries.push({
+              type: 'bib',
+              title: bibMatch[1],
+              file: file.path,
+              line: lineNumber,
+            });
+          }
+        }
 
         const todoMatch = rawLine.match(/%(TODO|FIXME|HACK|NOTE)\s*:?\s*(.*)/i);
         if (todoMatch) {
@@ -1398,6 +1420,89 @@ const App = {
         </div>
       `;
     }
+  },
+
+  async parseReferences() {
+    const refsEl = document.getElementById('refs-content');
+    if (!refsEl) return;
+    refsEl.innerHTML = '<div class="panel-loading">Checking labels, refs, and citations...</div>';
+    try {
+      const structure = await this.collectProjectStructure();
+      const labelsByKey = new Map();
+      const refsByKey = new Map();
+      const bibKeys = new Set(structure.bibEntries.map((item) => item.title));
+
+      structure.labels.forEach((item) => {
+        if (!labelsByKey.has(item.title)) labelsByKey.set(item.title, []);
+        labelsByKey.get(item.title).push(item);
+      });
+      structure.refs.forEach((item) => {
+        if (!refsByKey.has(item.title)) refsByKey.set(item.title, []);
+        refsByKey.get(item.title).push(item);
+      });
+
+      const brokenRefs = structure.refs
+        .filter((item) => !labelsByKey.has(item.title))
+        .map((item) => ({ ...item, kind: 'ref', severity: 'error', message: 'Referenced label was not found' }));
+      const duplicateLabels = Array.from(labelsByKey.entries())
+        .filter(([, items]) => items.length > 1)
+        .flatMap(([key, items]) => items.map((item) => ({ ...item, title: key, kind: 'label', severity: 'warning', message: 'Duplicate label key' })));
+      const unusedLabels = structure.labels
+        .filter((item) => !refsByKey.has(item.title))
+        .map((item) => ({ ...item, kind: 'label', severity: 'info', message: 'Label is not referenced in project' }));
+      const missingCitations = structure.bibEntries.length === 0
+        ? []
+        : structure.citations
+          .filter((item) => !bibKeys.has(item.title))
+          .map((item) => ({ ...item, kind: 'cite', severity: 'warning', message: 'Citation key was not found in .bib files' }));
+
+      const issueCount = brokenRefs.length + duplicateLabels.length + unusedLabels.length + missingCitations.length;
+      refsEl.innerHTML = `
+        <div class="outline-summary diagnostic-summary">
+          <span class="${brokenRefs.length ? 'error' : ''}">${brokenRefs.length} broken refs</span>
+          <span class="${duplicateLabels.length ? 'warning' : ''}">${duplicateLabels.length} duplicate labels</span>
+          <span>${unusedLabels.length} unused labels</span>
+          <span class="${missingCitations.length ? 'warning' : ''}">${missingCitations.length} missing cites</span>
+        </div>
+        ${issueCount === 0 ? `
+          <div class="panel-empty">
+            <strong>References look clean</strong>
+            <span>No broken refs, duplicate labels, unused labels, or missing citation keys detected.</span>
+          </div>
+        ` : `
+          ${this.renderDiagnosticGroup('Broken References', brokenRefs)}
+          ${this.renderDiagnosticGroup('Duplicate Labels', duplicateLabels)}
+          ${this.renderDiagnosticGroup('Unused Labels', unusedLabels)}
+          ${this.renderDiagnosticGroup('Missing Citations', missingCitations)}
+        `}
+      `;
+      this.bindStructureNavigation(refsEl);
+    } catch (err) {
+      refsEl.innerHTML = `
+        <div class="panel-empty error">
+          <strong>Could not check references</strong>
+          <span>${this.escapeHtml(err.message || 'Unknown reference parser error')}</span>
+        </div>
+      `;
+    }
+  },
+
+  renderDiagnosticGroup(title, items) {
+    if (!items.length) return '';
+    return `
+      <section class="outline-group">
+        <div class="outline-group-title">${this.escapeHtml(title)}</div>
+        ${items.map((item) => `
+          <button class="diagnostic-item ${this.escapeHtml(item.severity)}" type="button" data-file="${this.escapeHtml(item.file)}" data-line="${item.line}">
+            <span class="diagnostic-kind">${this.escapeHtml(item.kind)}</span>
+            <span class="outline-item-main">
+              <span class="outline-item-title">${this.escapeHtml(item.title || '(empty key)')}</span>
+              <span class="outline-item-location">${this.escapeHtml(item.message)} · ${this.escapeHtml(item.file)}:${item.line}</span>
+            </span>
+          </button>
+        `).join('')}
+      </section>
+    `;
   },
 
   async parseTodos() {
@@ -1801,6 +1906,7 @@ const App = {
       { label: 'Open symbols palette', hint: 'Greek, math, environments', run: () => this.showSymbolsPalette() },
       { label: 'Open asset manager', hint: 'Images, PDFs, includegraphics', run: () => this.showAssetManager() },
       { label: 'Show document outline', hint: 'Sections, labels, citations', run: () => document.querySelector('[data-tab="outline"]')?.click() },
+      { label: 'Check references', hint: 'Broken refs, labels, citations', run: () => document.querySelector('[data-tab="refs"]')?.click() },
       { label: 'Show TODO list', hint: 'TODO, FIXME, HACK, NOTE', run: () => document.querySelector('[data-tab="todo"]')?.click() },
       { label: 'Project settings', hint: 'Compiler, main file', run: () => this.showProjectSettingsModal() },
       { label: 'Toggle PDF preview', hint: 'Editor / PDF', run: () => this.togglePreview() },

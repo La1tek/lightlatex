@@ -1583,7 +1583,8 @@ a:hover {
 }
 
 .outline-item,
-.todo-item {
+.todo-item,
+.diagnostic-item {
   width: 100%;
   min-height: 34px;
   display: grid;
@@ -1600,13 +1601,15 @@ a:hover {
 }
 
 .outline-item:hover,
-.todo-item:hover {
+.todo-item:hover,
+.diagnostic-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 .outline-item:focus-visible,
-.todo-item:focus-visible {
+.todo-item:focus-visible,
+.diagnostic-item:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -1633,7 +1636,8 @@ a:hover {
   font-weight: 700;
 }
 
-.todo-kind {
+.todo-kind,
+.diagnostic-kind {
   color: var(--text-secondary);
 }
 
@@ -1671,6 +1675,52 @@ a:hover {
 .todo-item.error .todo-kind,
 .todo-item.error .outline-item-title {
   color: var(--error);
+}
+
+.diagnostic-summary span.error {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--border-color));
+  color: var(--error);
+  background: var(--error-soft);
+}
+
+.diagnostic-summary span.warning {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border-color));
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.diagnostic-item {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.diagnostic-kind {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  font-weight: 700;
+}
+
+.diagnostic-item.error {
+  border-left-color: var(--error);
+}
+
+.diagnostic-item.warning {
+  border-left-color: var(--warning);
+}
+
+.diagnostic-item.info {
+  border-left-color: var(--info);
+}
+
+.diagnostic-item.error .diagnostic-kind,
+.diagnostic-item.error .outline-item-title {
+  color: var(--error);
+}
+
+.diagnostic-item.warning .diagnostic-kind,
+.diagnostic-item.warning .outline-item-title {
+  color: var(--warning);
 }
 
 .editor-pane {
