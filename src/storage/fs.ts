@@ -141,6 +141,39 @@ export async function zipProject(projectId: string): Promise<Buffer> {
   });
 }
 
+export async function zipSnapshot(projectId: string, timestamp: string): Promise<Buffer> {
+  if (!timestamp || timestamp.includes("/") || timestamp.includes("\\")) {
+    throw new Error("Invalid snapshot timestamp");
+  }
+  const snapshotDir = path.join(getProjectDir(projectId), SNAPSHOTS_DIR, timestamp);
+  await fs.promises.access(snapshotDir);
+
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const archive = archiver("zip", { zlib: { level: 9 } });
+    archive.on("data", (chunk: Buffer) => chunks.push(chunk));
+    archive.on("end", () => resolve(Buffer.concat(chunks)));
+    archive.on("error", reject);
+
+    async function walk(dir: string, base: string = "") {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const rel = base ? `${base}/${entry.name}` : entry.name;
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(fullPath, rel);
+        } else {
+          archive.file(fullPath, { name: rel });
+        }
+      }
+    }
+
+    walk(snapshotDir)
+      .then(() => archive.finalize())
+      .catch(reject);
+  });
+}
+
 // ===== Snapshots =====
 export async function createSnapshot(projectId: string): Promise<string> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

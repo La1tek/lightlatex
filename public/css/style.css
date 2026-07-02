@@ -1378,7 +1378,7 @@ a:hover {
 .history-detail-toolbar {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto auto;
   align-items: end;
   gap: var(--space-10);
   padding: var(--space-10);

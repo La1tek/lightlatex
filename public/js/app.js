@@ -2485,6 +2485,7 @@ const App = {
                 <select id="history-file-select"></select>
               </label>
               <div class="history-selected" id="history-selected">No snapshot selected</div>
+              <button class="btn btn-secondary btn-small" type="button" id="history-download">Download ZIP</button>
               <button class="btn btn-primary btn-small" type="button" id="history-restore">Restore file</button>
             </div>
             <div class="history-diff" id="diff-container">
@@ -2511,11 +2512,13 @@ const App = {
     const timeline = overlay.querySelector('#history-timeline');
     const selectedLabel = overlay.querySelector('#history-selected');
     const restoreButton = overlay.querySelector('#history-restore');
+    const downloadButton = overlay.querySelector('#history-download');
     const preferredFile = Editor.currentFilePath || this.currentProject?.mainFile || textFiles[0]?.path || '';
 
     if (textFiles.length === 0) {
       fileSelect.innerHTML = '<option value="">No text files</option>';
       restoreButton.disabled = true;
+      downloadButton.disabled = true;
     } else {
       fileSelect.innerHTML = textFiles.map((file) => `<option value="${this.escapeHtml(file.path)}" ${file.path === preferredFile ? 'selected' : ''}>${this.escapeHtml(file.path)}</option>`).join('');
     }
@@ -2536,6 +2539,7 @@ const App = {
           </div>
         `;
         restoreButton.disabled = true;
+        downloadButton.disabled = true;
       } else {
         timeline.innerHTML = snapshots.map((snapshot, index) => `
           <button class="history-snapshot ${index === 0 ? 'active' : ''}" type="button" data-snapshot="${this.escapeHtml(snapshot)}">
@@ -2562,9 +2566,24 @@ const App = {
         </div>
       `;
       restoreButton.disabled = true;
+      downloadButton.disabled = true;
     }
 
     fileSelect.addEventListener('change', loadSelectedDiff);
+    downloadButton.addEventListener('click', async () => {
+      if (!selectedSnapshot) return;
+      try {
+        const blob = await api.download(`/projects/${this.currentProjectId}/history/${selectedSnapshot}/download`);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `snapshot-${selectedSnapshot}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        this.notify('Snapshot download failed: ' + err.message, 'error');
+      }
+    });
     restoreButton.addEventListener('click', async () => {
       if (!selectedSnapshot || !fileSelect.value) return;
       const filePath = fileSelect.value;

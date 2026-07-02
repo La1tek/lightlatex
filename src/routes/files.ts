@@ -3,7 +3,7 @@ import { authMiddleware, AuthRequest } from "../auth/middleware";
 import { db } from "../db";
 import { projects, files } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, ensureDir, getProjectDir, listSnapshots, getSnapshotFile, renameFile, resolveProjectPath } from "../storage/fs";
+import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, zipSnapshot, ensureDir, getProjectDir, listSnapshots, getSnapshotFile, renameFile, resolveProjectPath } from "../storage/fs";
 import { syncFileRecords, upsertFileRecord } from "../storage/fileRegistry";
 import { p, pw } from "../utils";
 import multer from "multer";
@@ -305,6 +305,20 @@ router.get("/:id/history", async (req: AuthRequest, res: Response) => {
     await verifyProject(id, req.userId!);
     const snapshots = await listSnapshots(id);
     res.json(snapshots);
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+router.get("/:id/history/:timestamp/download", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    await verifyProject(id, req.userId!);
+    const timestamp = String(req.params.timestamp);
+    const zipBuffer = await zipSnapshot(id, timestamp);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="snapshot-${timestamp}.zip"`);
+    res.send(zipBuffer);
   } catch (err: any) {
     res.status(404).json({ error: err.message });
   }
