@@ -317,6 +317,7 @@ const App = {
           </div>
           <div class="editor-toolbar-right">
             <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
+            <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} Symbols</button>
             <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
             <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
             <button class="btn btn-secondary btn-small" id="settings-btn" title="Project settings">${Icons.settings} Settings</button>
@@ -525,6 +526,7 @@ const App = {
 
     // Cross-file search
     document.getElementById('search-btn').addEventListener('click', () => this.showSearchModal());
+    document.getElementById('symbols-btn').addEventListener('click', () => this.showSymbolsPalette());
 
     // History/diff viewer
     document.getElementById('history-btn').addEventListener('click', () => this.showHistoryModal());
@@ -1484,6 +1486,151 @@ const App = {
     document.addEventListener('keydown', this.editorShortcutHandler);
   },
 
+  showSymbolsPalette() {
+    const groups = [
+      {
+        id: 'greek',
+        label: 'Greek',
+        items: [
+          ['alpha', '\\alpha'], ['beta', '\\beta'], ['gamma', '\\gamma'], ['delta', '\\delta'],
+          ['epsilon', '\\epsilon'], ['theta', '\\theta'], ['lambda', '\\lambda'], ['mu', '\\mu'],
+          ['pi', '\\pi'], ['rho', '\\rho'], ['sigma', '\\sigma'], ['phi', '\\phi'],
+          ['omega', '\\omega'], ['Gamma', '\\Gamma'], ['Delta', '\\Delta'], ['Theta', '\\Theta'],
+          ['Lambda', '\\Lambda'], ['Sigma', '\\Sigma'], ['Phi', '\\Phi'], ['Omega', '\\Omega'],
+        ],
+      },
+      {
+        id: 'operators',
+        label: 'Operators',
+        items: [
+          ['frac', '\\frac{}{}'], ['sqrt', '\\sqrt{}'], ['sum', '\\sum'], ['prod', '\\prod'],
+          ['int', '\\int'], ['lim', '\\lim'], ['infty', '\\infty'], ['partial', '\\partial'],
+          ['nabla', '\\nabla'], ['cdot', '\\cdot'], ['times', '\\times'], ['pm', '\\pm'],
+          ['leq', '\\leq'], ['geq', '\\geq'], ['neq', '\\neq'], ['approx', '\\approx'],
+          ['equiv', '\\equiv'], ['propto', '\\propto'], ['subseteq', '\\subseteq'], ['in', '\\in'],
+        ],
+      },
+      {
+        id: 'arrows',
+        label: 'Arrows',
+        items: [
+          ['to', '\\to'], ['leftarrow', '\\leftarrow'], ['rightarrow', '\\rightarrow'],
+          ['leftrightarrow', '\\leftrightarrow'], ['Leftarrow', '\\Leftarrow'], ['Rightarrow', '\\Rightarrow'],
+          ['Leftrightarrow', '\\Leftrightarrow'], ['mapsto', '\\mapsto'], ['uparrow', '\\uparrow'],
+          ['downarrow', '\\downarrow'],
+        ],
+      },
+      {
+        id: 'text',
+        label: 'Text',
+        items: [
+          ['textbf', '\\textbf{}'], ['textit', '\\textit{}'], ['emph', '\\emph{}'],
+          ['underline', '\\underline{}'], ['texttt', '\\texttt{}'], ['footnote', '\\footnote{}'],
+          ['cite', '\\cite{}'], ['ref', '\\ref{}'], ['label', '\\label{}'], ['url', '\\url{}'],
+        ],
+      },
+      {
+        id: 'environments',
+        label: 'Environments',
+        items: [
+          ['equation', '\\begin{equation}\n  \n\\end{equation}'],
+          ['align', '\\begin{align}\n  \n\\end{align}'],
+          ['itemize', '\\begin{itemize}\n  \\item \n\\end{itemize}'],
+          ['enumerate', '\\begin{enumerate}\n  \\item \n\\end{enumerate}'],
+          ['figure', '\\begin{figure}[ht]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{images/}\n  \\caption{}\n  \\label{fig:}\n\\end{figure}'],
+          ['table', '\\begin{table}[ht]\n  \\centering\n  \\begin{tabular}{}\n  \n  \\end{tabular}\n  \\caption{}\n  \\label{tab:}\n\\end{table}'],
+        ],
+      },
+    ];
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay symbols-overlay';
+    overlay.innerHTML = `
+      <div class="modal symbols-modal" role="dialog" aria-label="LaTeX symbols">
+        <div class="modal-heading-row">
+          <h2>Symbols</h2>
+          <button class="btn-icon" type="button" id="symbols-close" title="Close symbols" aria-label="Close symbols">${Icons.x}</button>
+        </div>
+        <label class="dashboard-search symbols-search" aria-label="Search symbols">
+          ${Icons.search16}
+          <input id="symbols-search-input" type="search" placeholder="Search commands, symbols, environments..." autocomplete="off">
+        </label>
+        <div class="symbols-tabs" role="tablist" aria-label="Symbol groups">
+          ${groups.map((group, index) => `<button class="${index === 0 ? 'active' : ''}" type="button" data-symbol-tab="${group.id}">${this.escapeHtml(group.label)}</button>`).join('')}
+        </div>
+        <div class="symbols-grid" id="symbols-grid"></div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    const input = overlay.querySelector('#symbols-search-input');
+    const grid = overlay.querySelector('#symbols-grid');
+    let activeGroup = groups[0].id;
+
+    const getItems = () => {
+      const query = input.value.trim().toLowerCase();
+      const source = query
+        ? groups.flatMap((group) => group.items.map(([name, value]) => ({ group: group.label, name, value })))
+        : groups.find((group) => group.id === activeGroup).items.map(([name, value]) => ({
+          group: groups.find((group) => group.id === activeGroup).label,
+          name,
+          value,
+        }));
+      return source
+        .filter((item) => !query || item.name.toLowerCase().includes(query) || item.value.toLowerCase().includes(query) || item.group.toLowerCase().includes(query))
+        .slice(0, 60);
+    };
+
+    const insertItem = (item) => {
+      Editor.insertText(item.value);
+      close();
+    };
+
+    const render = () => {
+      const items = getItems();
+      grid.innerHTML = items.length === 0
+        ? '<div class="command-empty">No symbols match this search</div>'
+        : items.map((item, index) => `
+          <button class="symbol-item ${index === 0 ? 'active' : ''}" type="button" data-index="${index}">
+            <code>${this.escapeHtml(item.value)}</code>
+            <span>${this.escapeHtml(item.name)}</span>
+            <small>${this.escapeHtml(item.group)}</small>
+          </button>
+        `).join('');
+      grid.querySelectorAll('.symbol-item').forEach((button) => {
+        button.addEventListener('click', () => {
+          const item = items[parseInt(button.dataset.index, 10)];
+          if (item) insertItem(item);
+        });
+      });
+      overlay._symbolItems = items;
+    };
+
+    overlay.querySelector('#symbols-close').addEventListener('click', close);
+    overlay.querySelectorAll('[data-symbol-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        activeGroup = button.dataset.symbolTab;
+        overlay.querySelectorAll('[data-symbol-tab]').forEach((tab) => tab.classList.remove('active'));
+        button.classList.add('active');
+        input.value = '';
+        render();
+      });
+    });
+    input.addEventListener('input', render);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        close();
+      } else if (e.key === 'Enter') {
+        const item = overlay._symbolItems?.[0];
+        if (item) insertItem(item);
+      }
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    render();
+    input.focus();
+  },
+
   showCommandPalette(mode = 'commands') {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay command-palette-overlay';
@@ -1501,6 +1648,7 @@ const App = {
     const commands = [
       { label: 'Compile project', hint: 'Ctrl+S', run: () => this.compile() },
       { label: 'Search project', hint: 'Ctrl+Shift+F', run: () => this.showSearchModal() },
+      { label: 'Open symbols palette', hint: 'Greek, math, environments', run: () => this.showSymbolsPalette() },
       { label: 'Show document outline', hint: 'Sections, labels, citations', run: () => document.querySelector('[data-tab="outline"]')?.click() },
       { label: 'Show TODO list', hint: 'TODO, FIXME, HACK, NOTE', run: () => document.querySelector('[data-tab="todo"]')?.click() },
       { label: 'Project settings', hint: 'Compiler, main file', run: () => this.showProjectSettingsModal() },

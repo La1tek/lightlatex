@@ -234,6 +234,20 @@ const Editor = {
     return editor ? editor.getModel().getValue() : '';
   },
 
+  insertText(text) {
+    if (!editor) return;
+    const model = editor.getModel();
+    if (!model) return;
+    const selection = editor.getSelection();
+    const range = selection || model.getFullModelRange();
+    editor.executeEdits('lighttex-symbol-palette', [{
+      range,
+      text,
+      forceMoveMarkers: true,
+    }]);
+    editor.focus();
+  },
+
   setCompileErrors(errors, filePath) {
     if (!editor || !monacoInstance || currentFilePath !== filePath) return;
 

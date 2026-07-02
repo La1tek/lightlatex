@@ -842,6 +842,18 @@ a:hover {
   font-size: var(--text-20);
 }
 
+.modal-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-bottom: var(--space-16);
+}
+
+.modal-heading-row h2 {
+  margin-bottom: 0;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -962,6 +974,99 @@ a:hover {
 .command-empty {
   padding: var(--space-16);
   text-align: center;
+}
+
+.symbols-modal {
+  width: min(780px, calc(100vw - 32px));
+  padding: var(--space-16);
+}
+
+.symbols-search {
+  margin-bottom: var(--space-12);
+}
+
+.symbols-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-12);
+  padding-bottom: var(--space-12);
+  border-bottom: var(--panel-border);
+}
+
+.symbols-tabs button {
+  min-height: 30px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-12);
+  font-weight: 600;
+}
+
+.symbols-tabs button:hover,
+.symbols-tabs button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.symbols-grid {
+  max-height: min(440px, 52dvh);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--space-8);
+  overflow: auto;
+  padding-right: var(--space-2);
+}
+
+.symbol-item {
+  min-height: 72px;
+  display: grid;
+  align-content: center;
+  gap: var(--space-4);
+  padding: var(--space-10);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.symbol-item:hover,
+.symbol-item.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.symbol-item code,
+.symbol-item span,
+.symbol-item small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.symbol-item code {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-13);
+  font-weight: 700;
+}
+
+.symbol-item span {
+  color: var(--text-primary);
+  font-size: var(--text-13);
+  font-weight: 600;
+}
+
+.symbol-item small {
+  color: var(--text-muted);
+  font-size: var(--text-11);
 }
 
 .template-selector {
@@ -2173,6 +2278,11 @@ td {
 
   .command-palette-overlay {
     padding-top: var(--space-16);
+  }
+
+  .symbols-grid {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    max-height: 56dvh;
   }
 
   .compile-panel {
