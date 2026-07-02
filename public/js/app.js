@@ -322,6 +322,7 @@ const App = {
             <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
             <button class="btn btn-secondary btn-small" id="settings-btn" title="Project settings">${Icons.settings} Settings</button>
             <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
+            <button class="btn btn-secondary btn-small" id="preflight-btn" title="Run preflight check">${Icons.check14} Check</button>
             <button class="btn btn-primary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
             <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
             <button class="btn btn-secondary btn-small" id="asset-manager-btn" title="Asset manager">${Icons.image16} Assets</button>
@@ -501,6 +502,7 @@ const App = {
     document.getElementById('download-pdf-btn').addEventListener('click', () => this.downloadPdf());
     document.getElementById('toggle-preview-btn').addEventListener('click', () => this.togglePreview());
     document.getElementById('settings-btn').addEventListener('click', () => this.showProjectSettingsModal());
+    document.getElementById('preflight-btn').addEventListener('click', () => this.showPreflightCheck());
     document.getElementById('toggle-theme-btn').addEventListener('click', () => this.toggleTheme());
     document.getElementById('editor-logout-btn').addEventListener('click', () => {
       api.clearTokens();
@@ -1154,6 +1156,24 @@ const App = {
     return filePath.split('/').map(encodeURIComponent).join('/');
   },
 
+  normalizeProjectPath(filePath) {
+    return (filePath || '').replace(/\\/g, '/').replace(/^\.?\//, '');
+  },
+
+  projectPathExists(filePath, filePaths) {
+    const normalized = this.normalizeProjectPath(filePath);
+    if (filePaths.has(normalized)) return true;
+    if (!normalized.includes('/')) {
+      const imagePath = `images/${normalized}`;
+      if (filePaths.has(imagePath)) return true;
+    }
+    const hasExtension = /\.[a-z0-9]+$/i.test(normalized);
+    if (!hasExtension) {
+      return Array.from(filePaths).some((candidate) => candidate === normalized || candidate.startsWith(`${normalized}.`) || candidate.startsWith(`images/${normalized}.`));
+    }
+    return false;
+  },
+
   stripLatexComment(line) {
     for (let i = 0; i < line.length; i++) {
       if (line[i] !== '%') continue;
@@ -1231,6 +1251,8 @@ const App = {
       citations: [],
       refs: [],
       bibEntries: [],
+      graphics: [],
+      bibliographies: [],
       todos: [],
       filesRead: 0,
     };
@@ -1335,6 +1357,41 @@ const App = {
             });
           });
         }
+
+        const graphicsRegex = /\\includegraphics(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+        let graphicsMatch;
+        while ((graphicsMatch = graphicsRegex.exec(line)) !== null) {
+          structure.graphics.push({
+            type: 'graphic',
+            title: graphicsMatch[1],
+            file: file.path,
+            line: lineNumber,
+          });
+        }
+
+        const addBibRegex = /\\addbibresource(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+        let addBibMatch;
+        while ((addBibMatch = addBibRegex.exec(line)) !== null) {
+          structure.bibliographies.push({
+            type: 'bibliography',
+            title: addBibMatch[1],
+            file: file.path,
+            line: lineNumber,
+          });
+        }
+
+        const bibliographyRegex = /\\bibliography\s*\{([^}]+)\}/g;
+        let bibliographyMatch;
+        while ((bibliographyMatch = bibliographyRegex.exec(line)) !== null) {
+          bibliographyMatch[1].split(',').map((item) => item.trim()).filter(Boolean).forEach((bibFile) => {
+            structure.bibliographies.push({
+              type: 'bibliography',
+              title: bibFile.endsWith('.bib') ? bibFile : `${bibFile}.bib`,
+              file: file.path,
+              line: lineNumber,
+            });
+          });
+        }
       }
     }
 
@@ -1371,6 +1428,7 @@ const App = {
       item.addEventListener('click', () => {
         const file = item.dataset.file;
         const line = parseInt(item.dataset.line, 10);
+        if (!file) return;
         this.openFile(file);
         setTimeout(() => Editor.revealLine(line), 200);
       });
@@ -1503,6 +1561,131 @@ const App = {
         `).join('')}
       </section>
     `;
+  },
+
+  async showPreflightCheck() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal preflight-modal" role="dialog" aria-label="Preflight check">
+        <div class="modal-heading-row">
+          <div>
+            <h2>Preflight Check</h2>
+            <p class="modal-subtitle">Project checks before compile/export.</p>
+          </div>
+          <button class="btn-icon" type="button" id="preflight-close" title="Close preflight" aria-label="Close preflight">${Icons.x}</button>
+        </div>
+        <div id="preflight-body">
+          <div class="panel-loading">Checking project...</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    const body = overlay.querySelector('#preflight-body');
+    overlay.querySelector('#preflight-close').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+
+    try {
+      const structure = await this.collectProjectStructure();
+      const filePaths = new Set(this.projectFiles.map((file) => this.normalizeProjectPath(file.path)));
+      const labelKeys = new Set(structure.labels.map((item) => item.title));
+      const refKeys = new Set(structure.refs.map((item) => item.title));
+      const bibKeys = new Set(structure.bibEntries.map((item) => item.title));
+      const labelsByKey = structure.labels.reduce((acc, item) => {
+        if (!acc.has(item.title)) acc.set(item.title, []);
+        acc.get(item.title).push(item);
+        return acc;
+      }, new Map());
+
+      const checks = [];
+      const addCheck = (severity, kind, title, message, file, line) => {
+        checks.push({ severity, kind, title, message, file: file || Editor.currentFilePath || this.currentProject?.mainFile || '', line: line || 1 });
+      };
+
+      const mainFile = this.currentProject?.mainFile;
+      if (!mainFile) {
+        addCheck('warning', 'main', 'No main file configured', 'Set a main .tex file in Project Settings.');
+      } else if (!filePaths.has(this.normalizeProjectPath(mainFile))) {
+        addCheck('error', 'main', mainFile, 'Configured main file is missing from the project.');
+      }
+
+      structure.graphics.forEach((item) => {
+        if (!this.projectPathExists(item.title, filePaths)) {
+          addCheck('error', 'asset', item.title, 'Image/PDF asset referenced by includegraphics was not found.', item.file, item.line);
+        }
+      });
+
+      structure.bibliographies.forEach((item) => {
+        if (!this.projectPathExists(item.title, filePaths)) {
+          addCheck('warning', 'bib', item.title, 'Bibliography file was not found.', item.file, item.line);
+        }
+      });
+
+      structure.refs.forEach((item) => {
+        if (!labelKeys.has(item.title)) {
+          addCheck('error', 'ref', item.title, 'Referenced label was not found.', item.file, item.line);
+        }
+      });
+
+      labelsByKey.forEach((items, key) => {
+        if (items.length > 1) {
+          items.forEach((item) => addCheck('warning', 'label', key, 'Duplicate label key.', item.file, item.line));
+        }
+      });
+
+      structure.labels.forEach((item) => {
+        if (!refKeys.has(item.title)) {
+          addCheck('info', 'label', item.title, 'Label is currently unused.', item.file, item.line);
+        }
+      });
+
+      if (structure.bibEntries.length > 0) {
+        structure.citations.forEach((item) => {
+          if (!bibKeys.has(item.title)) {
+            addCheck('warning', 'cite', item.title, 'Citation key was not found in .bib files.', item.file, item.line);
+          }
+        });
+      }
+
+      const errorCount = checks.filter((item) => item.severity === 'error').length;
+      const warningCount = checks.filter((item) => item.severity === 'warning').length;
+      const infoCount = checks.filter((item) => item.severity === 'info').length;
+      body.innerHTML = `
+        <div class="outline-summary diagnostic-summary">
+          <span class="${errorCount ? 'error' : ''}">${errorCount} errors</span>
+          <span class="${warningCount ? 'warning' : ''}">${warningCount} warnings</span>
+          <span>${infoCount} notes</span>
+        </div>
+        ${checks.length === 0 ? `
+          <div class="panel-empty">
+            <strong>Project is ready</strong>
+            <span>No missing main file, assets, bibliography files, labels, refs, or citations detected.</span>
+          </div>
+        ` : `
+          <div class="preflight-list">
+            ${checks.map((item) => `
+              <button class="diagnostic-item ${this.escapeHtml(item.severity)}" type="button" data-file="${this.escapeHtml(item.file)}" data-line="${item.line}">
+                <span class="diagnostic-kind">${this.escapeHtml(item.kind)}</span>
+                <span class="outline-item-main">
+                  <span class="outline-item-title">${this.escapeHtml(item.title)}</span>
+                  <span class="outline-item-location">${this.escapeHtml(item.message)} · ${this.escapeHtml(item.file)}:${item.line}</span>
+                </span>
+              </button>
+            `).join('')}
+          </div>
+        `}
+      `;
+      this.bindStructureNavigation(body);
+    } catch (err) {
+      body.innerHTML = `
+        <div class="panel-empty error">
+          <strong>Could not run preflight</strong>
+          <span>${this.escapeHtml(err.message || 'Unknown preflight error')}</span>
+        </div>
+      `;
+    }
   },
 
   async parseTodos() {
@@ -1902,6 +2085,7 @@ const App = {
     const close = () => overlay.remove();
     const commands = [
       { label: 'Compile project', hint: 'Ctrl+S', run: () => this.compile() },
+      { label: 'Run preflight check', hint: 'Main file, assets, refs', run: () => this.showPreflightCheck() },
       { label: 'Search project', hint: 'Ctrl+Shift+F', run: () => this.showSearchModal() },
       { label: 'Open symbols palette', hint: 'Greek, math, environments', run: () => this.showSymbolsPalette() },
       { label: 'Open asset manager', hint: 'Images, PDFs, includegraphics', run: () => this.showAssetManager() },
