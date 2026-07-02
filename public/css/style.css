@@ -854,6 +854,17 @@ a:hover {
   margin-bottom: 0;
 }
 
+.modal-subtitle {
+  margin-top: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.modal-subtitle code {
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -1067,6 +1078,99 @@ a:hover {
 .symbol-item small {
   color: var(--text-muted);
   font-size: var(--text-11);
+}
+
+.asset-modal {
+  width: min(920px, calc(100vw - 32px));
+  padding: var(--space-16);
+}
+
+.asset-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-12);
+}
+
+.asset-grid {
+  max-height: min(560px, 62dvh);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-12);
+  overflow: auto;
+  padding-right: var(--space-2);
+}
+
+.asset-empty {
+  grid-column: 1 / -1;
+}
+
+.asset-card {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 128px auto auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.asset-preview {
+  display: grid;
+  place-items: center;
+  border-bottom: var(--panel-border);
+  background: var(--bg-editor);
+  color: var(--text-muted);
+}
+
+.asset-preview span,
+.asset-preview svg {
+  width: 42px;
+  height: 42px;
+}
+
+.asset-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--bg-primary);
+}
+
+.asset-info {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-10);
+}
+
+.asset-info strong,
+.asset-info code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-info strong {
+  color: var(--text-primary);
+  font-size: var(--text-13);
+}
+
+.asset-info code {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+}
+
+.asset-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 0 var(--space-10) var(--space-10);
+}
+
+.asset-actions .btn {
+  min-width: 0;
 }
 
 .template-selector {
@@ -2283,6 +2387,11 @@ td {
   .symbols-grid {
     grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
     max-height: 56dvh;
+  }
+
+  .asset-grid {
+    grid-template-columns: 1fr;
+    max-height: 58dvh;
   }
 
   .compile-panel {
