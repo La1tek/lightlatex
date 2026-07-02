@@ -10,6 +10,7 @@ const App = {
   currentProject: null,
   logsPanelVisible: false,
   structureRefreshTimer: null,
+  citationEntries: [],
 
   async init() {
     const theme = localStorage.getItem('theme') || 'light';
@@ -318,6 +319,7 @@ const App = {
           <div class="editor-toolbar-right">
             <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
             <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} Symbols</button>
+            <button class="btn btn-secondary btn-small" id="citation-manager-btn" title="Citation manager">${Icons.cite16} Cite</button>
             <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
             <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
             <button class="btn btn-secondary btn-small" id="settings-btn" title="Project settings">${Icons.settings} Settings</button>
@@ -538,6 +540,7 @@ const App = {
     // Cross-file search
     document.getElementById('search-btn').addEventListener('click', () => this.showSearchModal());
     document.getElementById('symbols-btn').addEventListener('click', () => this.showSymbolsPalette());
+    document.getElementById('citation-manager-btn').addEventListener('click', () => this.showCitationManager());
 
     // History/diff viewer
     document.getElementById('history-btn').addEventListener('click', () => this.showHistoryModal());
@@ -560,6 +563,7 @@ const App = {
       if (saveState) saveState.textContent = 'Saved just now';
       this.updateWordCount();
       this.queueStructureRefresh();
+      if (Editor.currentFilePath && Editor.currentFilePath.endsWith('.bib')) this.refreshCitationCache();
       if (autoCompileEnabled) {
         clearTimeout(autoCompileTimer);
         autoCompileTimer = setTimeout(() => this.compile(), 3000);
@@ -605,6 +609,7 @@ const App = {
     });
 
     this.bindEditorShortcuts();
+    this.refreshCitationCache();
   },
 
   async uploadImages(fileList) {
@@ -786,6 +791,316 @@ const App = {
     }
   },
 
+  async refreshCitationCache(options = {}) {
+    try {
+      this.citationEntries = await this.loadCitationEntries();
+      Editor.setCitationEntries(this.citationEntries);
+      if (options.notify) this.notify(`Loaded ${this.citationEntries.length} citation entries`, 'success');
+      return this.citationEntries;
+    } catch (err) {
+      if (options.notify) this.notify('Citation refresh failed: ' + err.message, 'error');
+      return this.citationEntries || [];
+    }
+  },
+
+  async loadCitationEntries() {
+    const bibFiles = this.projectFiles.filter((file) => file.path.endsWith('.bib')).sort((a, b) => a.path.localeCompare(b.path));
+    const entries = [];
+    for (const file of bibFiles) {
+      try {
+        const content = await this.readProjectTextFile(file.path);
+        entries.push(...this.extractBibEntries(content, file.path));
+      } catch {
+        // Skip unreadable bibliography files.
+      }
+    }
+    return entries.sort((a, b) => a.key.localeCompare(b.key));
+  },
+
+  extractBibEntries(content, filePath) {
+    const entries = [];
+    const entryRegex = /@([a-zA-Z]+)\s*\{\s*([^,\s]+)\s*,/g;
+    let match;
+    while ((match = entryRegex.exec(content)) !== null) {
+      const start = match.index;
+      let depth = 0;
+      let end = content.length;
+      for (let i = start; i < content.length; i++) {
+        const char = content[i];
+        if (char === '{') depth++;
+        if (char === '}') {
+          depth--;
+          if (depth === 0) {
+            end = i + 1;
+            break;
+          }
+        }
+      }
+      const raw = content.slice(start, end);
+      const fields = this.parseBibFields(raw);
+      const line = content.slice(0, start).split('\n').length;
+      entries.push({
+        type: match[1].toLowerCase(),
+        key: match[2],
+        file: filePath,
+        line,
+        raw,
+        fields,
+        author: fields.author || fields.editor || '',
+        title: fields.title || '',
+        year: fields.year || fields.date || '',
+        venue: fields.journal || fields.booktitle || fields.publisher || fields.school || '',
+        doi: fields.doi || '',
+        url: fields.url || '',
+      });
+      entryRegex.lastIndex = end;
+    }
+    return entries;
+  },
+
+  parseBibFields(raw) {
+    const fields = {};
+    const fieldRegex = /([a-zA-Z][\w-]*)\s*=\s*(\{(?:[^{}]|\{[^{}]*\})*\}|"[^"]*"|[^,\n]+)\s*,?/g;
+    let match;
+    while ((match = fieldRegex.exec(raw)) !== null) {
+      fields[match[1].toLowerCase()] = this.cleanBibValue(match[2]);
+    }
+    return fields;
+  },
+
+  cleanBibValue(value) {
+    return (value || '')
+      .trim()
+      .replace(/^[{"]|[}"]$/g, '')
+      .replace(/[{}]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
+  formatAuthors(author) {
+    if (!author) return 'Unknown author';
+    return author
+      .split(/\s+and\s+/i)
+      .slice(0, 3)
+      .map((name) => name.includes(',') ? name.split(',')[0].trim() : name.trim().split(/\s+/).slice(-1)[0])
+      .join(', ') + (author.split(/\s+and\s+/i).length > 3 ? ' et al.' : '');
+  },
+
+  async showCitationManager() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay citation-overlay';
+    overlay.innerHTML = `
+      <div class="modal citation-modal" role="dialog" aria-label="Citation manager">
+        <div class="modal-heading-row">
+          <div>
+            <h2>Citations</h2>
+            <p class="modal-subtitle">Search `.bib` entries and insert citation commands.</p>
+          </div>
+          <button class="btn-icon" type="button" id="citation-close" title="Close citations" aria-label="Close citations">${Icons.x}</button>
+        </div>
+        <div class="citation-toolbar">
+          <label class="dashboard-search citation-search" aria-label="Search citations">
+            ${Icons.search16}
+            <input id="citation-search-input" type="search" placeholder="Search key, author, title, year..." autocomplete="off">
+          </label>
+          <select id="citation-command" aria-label="Citation command">
+            ${['cite', 'citep', 'citet', 'parencite', 'textcite', 'autocite'].map((command) => `<option value="${command}">\\${command}{}</option>`).join('')}
+          </select>
+          <button class="btn btn-secondary btn-small" type="button" id="citation-add">${Icons.plus16} Add</button>
+          <button class="btn btn-secondary btn-small" type="button" id="citation-refresh">${Icons.clock14} Refresh</button>
+        </div>
+        <div class="citation-summary" id="citation-summary"></div>
+        <div class="citation-list" id="citation-list">
+          <div class="panel-loading">Loading bibliography...</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    const input = overlay.querySelector('#citation-search-input');
+    const list = overlay.querySelector('#citation-list');
+    const summary = overlay.querySelector('#citation-summary');
+    const commandSelect = overlay.querySelector('#citation-command');
+    let entries = [];
+
+    const insertEntry = (entry) => {
+      Editor.insertText(`\\${commandSelect.value}{${entry.key}}`);
+      close();
+    };
+
+    const render = () => {
+      const query = input.value.trim().toLowerCase();
+      const filtered = entries.filter((entry) => {
+        const haystack = `${entry.key} ${entry.type} ${entry.author} ${entry.title} ${entry.year} ${entry.venue} ${entry.doi}`.toLowerCase();
+        return haystack.includes(query);
+      });
+      const bibFileCount = new Set(entries.map((entry) => entry.file)).size;
+      summary.innerHTML = `
+        <span>${entries.length} entries</span>
+        <span>${bibFileCount} .bib files</span>
+        <span>${filtered.length} shown</span>
+      `;
+      if (entries.length === 0) {
+        list.innerHTML = `
+          <div class="panel-empty">
+            <strong>No bibliography entries</strong>
+            <span>Add a raw BibTeX entry or create a references.bib file to start citing sources.</span>
+          </div>
+        `;
+        return;
+      }
+      if (filtered.length === 0) {
+        list.innerHTML = '<div class="command-empty">No citations match this search</div>';
+        return;
+      }
+      list.innerHTML = filtered.map((entry, index) => `
+        <article class="citation-row" data-index="${index}">
+          <div class="citation-row-main">
+            <div class="citation-row-title">
+              <code>${this.escapeHtml(entry.key)}</code>
+              <span>${this.escapeHtml(entry.title || '(untitled)')}</span>
+            </div>
+            <div class="citation-row-meta">
+              <span>${this.escapeHtml(this.formatAuthors(entry.author))}</span>
+              <span>${this.escapeHtml(entry.year || 'n.d.')}</span>
+              <span>${this.escapeHtml(entry.venue || entry.type)}</span>
+              <span>${this.escapeHtml(entry.file)}:${entry.line}</span>
+            </div>
+          </div>
+          <div class="citation-row-actions">
+            <button class="btn btn-primary btn-small" type="button" data-citation-insert="${index}">Insert</button>
+            <button class="btn btn-secondary btn-small" type="button" data-citation-copy="${index}">Copy key</button>
+            <button class="btn btn-secondary btn-small" type="button" data-citation-open="${index}">Open</button>
+          </div>
+        </article>
+      `).join('');
+      list.querySelectorAll('[data-citation-insert]').forEach((button) => {
+        button.addEventListener('click', () => insertEntry(filtered[parseInt(button.dataset.citationInsert, 10)]));
+      });
+      list.querySelectorAll('[data-citation-copy]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const entry = filtered[parseInt(button.dataset.citationCopy, 10)];
+          try {
+            if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(entry.key);
+            this.notify('Citation key copied', 'success');
+          } catch {
+            this.notify('Could not copy key automatically', 'error');
+          }
+        });
+      });
+      list.querySelectorAll('[data-citation-open]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const entry = filtered[parseInt(button.dataset.citationOpen, 10)];
+          this.openFile(entry.file);
+          setTimeout(() => Editor.revealLine(entry.line), 200);
+          close();
+        });
+      });
+    };
+
+    const refresh = async () => {
+      list.innerHTML = '<div class="panel-loading">Loading bibliography...</div>';
+      entries = await this.refreshCitationCache();
+      render();
+    };
+
+    overlay.querySelector('#citation-close').addEventListener('click', close);
+    overlay.querySelector('#citation-refresh').addEventListener('click', () => refresh());
+    overlay.querySelector('#citation-add').addEventListener('click', () => this.showBibEntryModal(async () => {
+      entries = await this.refreshCitationCache({ notify: true });
+      render();
+    }));
+    input.addEventListener('input', render);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+      if (e.key === 'Enter') {
+        const first = list.querySelector('[data-citation-insert]');
+        if (first) first.click();
+      }
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    refresh();
+    input.focus();
+  },
+
+  showBibEntryModal(onSaved) {
+    const bibFiles = this.projectFiles.filter((file) => file.path.endsWith('.bib')).map((file) => file.path);
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal bib-entry-modal" role="dialog" aria-label="Add BibTeX entry">
+        <h2>Add BibTeX Entry</h2>
+        <form id="bib-entry-form">
+          <div class="form-group">
+            <label for="bib-entry-file">Target .bib file</label>
+            <input id="bib-entry-file" type="text" value="${this.escapeHtml(bibFiles[0] || 'references.bib')}" list="bib-entry-files" autocomplete="off" required>
+            <datalist id="bib-entry-files">
+              ${bibFiles.map((file) => `<option value="${this.escapeHtml(file)}"></option>`).join('')}
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label for="bib-entry-raw">Raw BibTeX</label>
+            <textarea id="bib-entry-raw" rows="12" spellcheck="false">@article{key2026,
+  title = {Article title},
+  author = {Author, Alice and Author, Bob},
+  journal = {Journal Name},
+  year = {2026}
+}</textarea>
+            <div class="field-error" id="bib-entry-error" role="alert"></div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" id="bib-entry-cancel">Cancel</button>
+            <button class="btn btn-primary" type="submit" id="bib-entry-save">Save entry</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#bib-entry-cancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    overlay.querySelector('#bib-entry-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pathInput = overlay.querySelector('#bib-entry-file');
+      const rawInput = overlay.querySelector('#bib-entry-raw');
+      const error = overlay.querySelector('#bib-entry-error');
+      const save = overlay.querySelector('#bib-entry-save');
+      const filePath = pathInput.value.trim();
+      const raw = rawInput.value.trim();
+      error.textContent = '';
+      if (!filePath.endsWith('.bib')) return error.textContent = 'Target file must end with .bib.';
+      if (!raw.startsWith('@') || !raw.includes('{')) return error.textContent = 'Paste a valid BibTeX entry starting with @.';
+      save.disabled = true;
+      save.innerHTML = `${Icons.clock14} Saving...`;
+      try {
+        const exists = this.projectFiles.some((file) => file.path === filePath);
+        if (!exists) {
+          const file = await api.post(`/projects/${this.currentProjectId}/files`, { path: filePath, content: raw + '\n' });
+          this.projectFiles.push(file);
+          this.fileTree.setFiles(this.projectFiles);
+        } else {
+          const existing = await this.readProjectTextFile(filePath);
+          await api.put(`/projects/${this.currentProjectId}/files/${this.encodeProjectPath(filePath)}`, {
+            content: `${existing.trimEnd()}\n\n${raw}\n`,
+          });
+        }
+        this.notify('BibTeX entry saved', 'success');
+        if (onSaved) await onSaved();
+        close();
+      } catch (err) {
+        error.textContent = err.message;
+      } finally {
+        save.disabled = false;
+        save.innerHTML = 'Save entry';
+      }
+    });
+    overlay.querySelector('#bib-entry-raw').focus();
+  },
+
   async openFile(path) {
     try {
       const content = await fetch(`/api/projects/${this.currentProjectId}/files/${path}`, {
@@ -868,6 +1183,7 @@ const App = {
         this.projectFiles.push(file);
         this.fileTree.setFiles(this.projectFiles);
         this.openFile(filePath);
+        if (filePath.endsWith('.bib')) this.refreshCitationCache();
         close();
       } catch (err) {
         errorEl.textContent = 'Failed to create file: ' + err.message;
@@ -896,6 +1212,7 @@ const App = {
           Editor.setContext(null, null);
         }
       }
+      if (path.endsWith('.bib')) this.refreshCitationCache();
     } catch (err) {
       alert('Failed to delete file: ' + err.message);
     }
@@ -1765,6 +2082,7 @@ const App = {
       if (Editor.currentFilePath === oldPath) {
         this.openFile(newPath);
       }
+      if (oldPath.endsWith('.bib') || newPath.endsWith('.bib')) this.refreshCitationCache();
     } catch (err) {
       this.notify('Rename failed: ' + err.message, 'error');
     }
@@ -2088,6 +2406,7 @@ const App = {
       { label: 'Run preflight check', hint: 'Main file, assets, refs', run: () => this.showPreflightCheck() },
       { label: 'Search project', hint: 'Ctrl+Shift+F', run: () => this.showSearchModal() },
       { label: 'Open symbols palette', hint: 'Greek, math, environments', run: () => this.showSymbolsPalette() },
+      { label: 'Open citation manager', hint: '.bib search and cite insert', run: () => this.showCitationManager() },
       { label: 'Open asset manager', hint: 'Images, PDFs, includegraphics', run: () => this.showAssetManager() },
       { label: 'Show document outline', hint: 'Sections, labels, citations', run: () => document.querySelector('[data-tab="outline"]')?.click() },
       { label: 'Check references', hint: 'Broken refs, labels, citations', run: () => document.querySelector('[data-tab="refs"]')?.click() },

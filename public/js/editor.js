@@ -5,6 +5,7 @@ let currentFilePath = null;
 let autosaveTimer = null;
 let compileMarkers = [];
 let currentImageFiles = [];
+let currentCitationEntries = [];
 let suppressNextChange = false;
 
 const Editor = {
@@ -211,6 +212,18 @@ const Editor = {
           }
         }
 
+        if (currentCitationEntries.length > 0) {
+          for (const entry of currentCitationEntries) {
+            suggestions.push({
+              label: entry.key,
+              kind: monaco.languages.CompletionItemKind.Reference,
+              insertText: entry.key,
+              detail: `${entry.author || 'Citation'}${entry.year ? ' · ' + entry.year : ''}`,
+              documentation: entry.title || `Insert citation key ${entry.key}`,
+            });
+          }
+        }
+
         return { suggestions };
       }
     });
@@ -218,6 +231,10 @@ const Editor = {
 
   setImageFiles(files) {
     currentImageFiles = files || [];
+  },
+
+  setCitationEntries(entries) {
+    currentCitationEntries = entries || [];
   },
 
   setValue(content, options = {}) {
