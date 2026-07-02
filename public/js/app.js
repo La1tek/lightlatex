@@ -9,6 +9,7 @@ const App = {
   compileLog: '',
   currentProject: null,
   logsPanelVisible: false,
+  structureRefreshTimer: null,
 
   async init() {
     const theme = localStorage.getItem('theme') || 'light';
@@ -462,6 +463,7 @@ const App = {
       onDirty: () => {
         const saveState = document.getElementById('save-state');
         if (saveState) saveState.textContent = 'Unsaved changes';
+        this.queueStructureRefresh();
       },
       onCompile: () => this.compile(),
     });
@@ -544,6 +546,7 @@ const App = {
       await origAutosave();
       if (saveState) saveState.textContent = 'Saved just now';
       this.updateWordCount();
+      this.queueStructureRefresh();
       if (autoCompileEnabled) {
         clearTimeout(autoCompileTimer);
         autoCompileTimer = setTimeout(() => this.compile(), 3000);
@@ -633,13 +636,17 @@ const App = {
       }).then(r => r.text());
 
       Editor.setContext(this.currentProjectId, path);
-      Editor.setValue(content);
+      Editor.setValue(content, { silent: true });
       const currentFileTab = document.getElementById('current-file-tab');
       if (currentFileTab) {
         currentFileTab.innerHTML = `${Icons.fileTex} ${this.escapeHtml(path)}`;
       }
+      const saveState = document.getElementById('save-state');
+      if (saveState) saveState.textContent = 'Saved';
       this.fileTree.selectFile(path);
       Editor.setCompileErrors([], path);
+      this.updateWordCount();
+      this.queueStructureRefresh();
     } catch (err) {
       console.error('Failed to open file:', err);
     }
@@ -728,7 +735,7 @@ const App = {
         if (this.projectFiles.length > 0) {
           this.openFile(this.projectFiles[0].path);
         } else {
-          Editor.setValue('');
+          Editor.setValue('', { silent: true });
           Editor.setContext(null, null);
         }
       }
@@ -961,79 +968,331 @@ const App = {
     }, 4000);
   },
 
+  getActiveSidebarTab() {
+    return document.querySelector('.sidebar-tab.active')?.dataset.tab || 'files';
+  },
+
+  queueStructureRefresh() {
+    clearTimeout(this.structureRefreshTimer);
+    this.structureRefreshTimer = setTimeout(() => this.refreshActiveSidebarPanel(), 700);
+  },
+
+  refreshActiveSidebarPanel() {
+    const tab = this.getActiveSidebarTab();
+    if (tab === 'outline') this.parseOutline();
+    if (tab === 'todo') this.parseTodos();
+  },
+
+  async readProjectTextFile(filePath) {
+    if (filePath === Editor.currentFilePath) {
+      return Editor.getValue();
+    }
+    const headers = { 'Authorization': 'Bearer ' + api.token };
+    const safePath = filePath.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch('/api/projects/' + this.currentProjectId + '/files/' + safePath, { headers });
+    if (!res.ok) throw new Error('Could not read ' + filePath);
+    return res.text();
+  },
+
+  stripLatexComment(line) {
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] !== '%') continue;
+      let slashCount = 0;
+      for (let j = i - 1; j >= 0 && line[j] === '\\'; j--) slashCount++;
+      if (slashCount % 2 === 0) return line.slice(0, i);
+    }
+    return line;
+  },
+
+  readLatexBraceArgument(line, startIndex) {
+    let i = startIndex;
+    while (i < line.length && /\s/.test(line[i])) i++;
+    if (line[i] === '[') {
+      let depth = 0;
+      while (i < line.length) {
+        if (line[i] === '[') depth++;
+        if (line[i] === ']') depth--;
+        i++;
+        if (depth === 0) break;
+      }
+      while (i < line.length && /\s/.test(line[i])) i++;
+    }
+    if (line[i] !== '{') return '';
+    let depth = 0;
+    let value = '';
+    for (; i < line.length; i++) {
+      const char = line[i];
+      const escaped = i > 0 && line[i - 1] === '\\';
+      if (char === '{' && !escaped) {
+        if (depth > 0) value += char;
+        depth++;
+        continue;
+      }
+      if (char === '}' && !escaped) {
+        depth--;
+        if (depth === 0) break;
+      }
+      if (depth > 0) value += char;
+    }
+    return value;
+  },
+
+  cleanLatexText(value) {
+    return (value || '')
+      .replace(/\\(?:textbf|textit|emph|texttt|underline)\s*\{([^}]*)\}/g, '$1')
+      .replace(/\\[a-zA-Z@]+\*?(?:\[[^\]]*\])?/g, '')
+      .replace(/[{}]/g, '')
+      .replace(/~/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
+  isStructureFile(filePath) {
+    return /\.(tex|bib|sty|cls)$/i.test(filePath);
+  },
+
+  async collectProjectStructure() {
+    const textFiles = this.projectFiles
+      .filter((file) => this.isStructureFile(file.path))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    const sectionLevels = {
+      part: 0,
+      chapter: 1,
+      section: 2,
+      subsection: 3,
+      subsubsection: 4,
+      paragraph: 5,
+      subparagraph: 6,
+    };
+    const structure = {
+      sections: [],
+      labels: [],
+      environments: [],
+      citations: [],
+      refs: [],
+      todos: [],
+      filesRead: 0,
+    };
+
+    for (const file of textFiles) {
+      let content = '';
+      try {
+        content = await this.readProjectTextFile(file.path);
+        structure.filesRead++;
+      } catch {
+        continue;
+      }
+
+      const lines = content.split('\n');
+      for (let index = 0; index < lines.length; index++) {
+        const rawLine = lines[index];
+        const line = this.stripLatexComment(rawLine);
+        const lineNumber = index + 1;
+
+        const todoMatch = rawLine.match(/%(TODO|FIXME|HACK|NOTE)\s*:?\s*(.*)/i);
+        if (todoMatch) {
+          structure.todos.push({
+            type: todoMatch[1].toUpperCase(),
+            text: todoMatch[2] || '(empty)',
+            file: file.path,
+            line: lineNumber,
+          });
+        }
+
+        const sectionCommandRegex = /\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?/g;
+        let sectionMatch;
+        while ((sectionMatch = sectionCommandRegex.exec(line)) !== null) {
+          const command = sectionMatch[1];
+          const title = this.cleanLatexText(this.readLatexBraceArgument(line, sectionCommandRegex.lastIndex));
+          if (!title) continue;
+          structure.sections.push({
+            type: 'section',
+            command,
+            level: sectionLevels[command],
+            title,
+            file: file.path,
+            line: lineNumber,
+          });
+        }
+
+        const envRegex = /\\begin\{(figure\*?|table\*?|equation\*?|align\*?)\}/g;
+        let envMatch;
+        while ((envMatch = envRegex.exec(line)) !== null) {
+          structure.environments.push({
+            type: 'environment',
+            environment: envMatch[1],
+            title: envMatch[1],
+            file: file.path,
+            line: lineNumber,
+          });
+        }
+
+        const labelRegex = /\\label\s*\{([^}]+)\}/g;
+        let labelMatch;
+        while ((labelMatch = labelRegex.exec(line)) !== null) {
+          structure.labels.push({
+            type: 'label',
+            title: labelMatch[1],
+            file: file.path,
+            line: lineNumber,
+          });
+        }
+
+        const refRegex = /\\(?:ref|eqref|autoref|cref|Cref)\s*\{([^}]+)\}/g;
+        let refMatch;
+        while ((refMatch = refRegex.exec(line)) !== null) {
+          structure.refs.push({
+            type: 'ref',
+            title: refMatch[1],
+            file: file.path,
+            line: lineNumber,
+          });
+        }
+
+        const citeRegex = /\\(?:cite|citep|citet|parencite|textcite|autocite)\w*\s*\{([^}]+)\}/g;
+        let citeMatch;
+        while ((citeMatch = citeRegex.exec(line)) !== null) {
+          citeMatch[1].split(',').map((item) => item.trim()).filter(Boolean).forEach((key) => {
+            structure.citations.push({
+              type: 'citation',
+              title: key,
+              file: file.path,
+              line: lineNumber,
+            });
+          });
+        }
+      }
+    }
+
+    return structure;
+  },
+
+  renderOutlineGroup(title, items, kindLabel) {
+    if (!items.length) return '';
+    return `
+      <section class="outline-group">
+        <div class="outline-group-title">${this.escapeHtml(title)}</div>
+        ${items.map((item) => this.renderOutlineItem(item, kindLabel)).join('')}
+      </section>
+    `;
+  },
+
+  renderOutlineItem(item, kindLabel) {
+    const levelClass = item.level !== undefined ? ` level-${item.level}` : '';
+    const activeClass = item.file === Editor.currentFilePath ? ' current-file' : '';
+    const label = kindLabel || item.command || item.environment || item.type;
+    return `
+      <button class="outline-item${levelClass}${activeClass}" type="button" data-file="${this.escapeHtml(item.file)}" data-line="${item.line}">
+        <span class="outline-item-kind">${this.escapeHtml(label)}</span>
+        <span class="outline-item-main">
+          <span class="outline-item-title">${this.escapeHtml(item.title || '(untitled)')}</span>
+          <span class="outline-item-location">${this.escapeHtml(item.file)}:${item.line}</span>
+        </span>
+      </button>
+    `;
+  },
+
+  bindStructureNavigation(container) {
+    container.querySelectorAll('[data-file][data-line]').forEach((item) => {
+      item.addEventListener('click', () => {
+        const file = item.dataset.file;
+        const line = parseInt(item.dataset.line, 10);
+        this.openFile(file);
+        setTimeout(() => Editor.revealLine(line), 200);
+      });
+    });
+  },
+
   async parseOutline() {
     const outlineEl = document.getElementById('outline-content');
     if (!outlineEl) return;
+    outlineEl.innerHTML = '<div class="panel-loading">Parsing project structure...</div>';
     try {
-      const texFiles = this.projectFiles.filter(f => f.path.endsWith('.tex'));
-      let allContent = '';
-      for (const f of texFiles) {
-        try {
-          const headers = { 'Authorization': 'Bearer ' + api.token };
-          const content = await fetch('/api/projects/' + this.currentProjectId + '/files/' + f.path, { headers }).then(r => r.text());
-          allContent += content + '\n';
-        } catch { /* skip */ }
+      const structure = await this.collectProjectStructure();
+      const sectionCount = structure.sections.length;
+      const labelCount = structure.labels.length;
+      const envCount = structure.environments.length;
+      const citeCount = new Set(structure.citations.map((item) => item.title)).size;
+
+      if (sectionCount + labelCount + envCount + citeCount === 0) {
+        outlineEl.innerHTML = `
+          <div class="panel-empty">
+            <strong>No outline yet</strong>
+            <span>Add \\section{}, \\label{}, figures, tables, or citations to build project navigation.</span>
+          </div>
+        `;
+        return;
       }
-      const items = [];
-      const regex = /\\((?:section|subsection|subsubsection|chapter))\{([^}]*)\}/g;
-      let match;
-      while ((match = regex.exec(allContent)) !== null) {
-        items.push({ level: match[1], title: match[2], line: allContent.substring(0, match.index).split('\n').length });
-      }
-      if (items.length === 0) {
-        outlineEl.innerHTML = '<div style="padding:8px;color:var(--text-secondary)">No sections found</div>';
-      } else {
-        outlineEl.innerHTML = items.map(i =>
-          '<div class="outline-item ' + i.level + '" data-line="' + i.line + '">' + this.escapeHtml(i.title) + '</div>'
-        ).join('');
-        outlineEl.querySelectorAll('.outline-item').forEach(el => {
-          el.addEventListener('click', () => {
-            Editor.revealLine(parseInt(el.dataset.line));
-          });
-        });
-      }
+
+      const uniqueCitations = Array.from(new Map(structure.citations.map((item) => [item.title, item])).values());
+      outlineEl.innerHTML = `
+        <div class="outline-summary">
+          <span>${sectionCount} sections</span>
+          <span>${labelCount} labels</span>
+          <span>${envCount} floats/math</span>
+          <span>${citeCount} cites</span>
+        </div>
+        ${this.renderOutlineGroup('Document Structure', structure.sections)}
+        ${this.renderOutlineGroup('Figures, Tables & Equations', structure.environments, 'env')}
+        ${this.renderOutlineGroup('Labels', structure.labels, 'label')}
+        ${this.renderOutlineGroup('Citations', uniqueCitations, 'cite')}
+      `;
+      this.bindStructureNavigation(outlineEl);
     } catch (err) {
-      outlineEl.innerHTML = '<div style="padding:8px;color:var(--error)">Error parsing outline</div>';
+      outlineEl.innerHTML = `
+        <div class="panel-empty error">
+          <strong>Could not parse outline</strong>
+          <span>${this.escapeHtml(err.message || 'Unknown parser error')}</span>
+        </div>
+      `;
     }
   },
 
   async parseTodos() {
     const todoEl = document.getElementById('todo-content');
     if (!todoEl) return;
+    todoEl.innerHTML = '<div class="panel-loading">Scanning comments...</div>';
     try {
-      const texFiles = this.projectFiles.filter(f => f.path.endsWith('.tex'));
-      const items = [];
-      for (const f of texFiles) {
-        try {
-          const headers = { 'Authorization': 'Bearer ' + api.token };
-          const content = await fetch('/api/projects/' + this.currentProjectId + '/files/' + f.path, { headers }).then(r => r.text());
-          const lines = content.split('\n');
-          for (let i = 0; i < lines.length; i++) {
-            const match = lines[i].match(/%(TODO|FIXME|HACK)\s*(.*)/i);
-            if (match) {
-              const type = match[1].toUpperCase();
-              items.push({ type, text: match[2], file: f.path, line: i + 1 });
-            }
-          }
-        } catch { /* skip */ }
-      }
+      const structure = await this.collectProjectStructure();
+      const items = structure.todos;
       if (items.length === 0) {
-        todoEl.innerHTML = '<div style="padding:8px;color:var(--text-secondary)">No TODOs found</div>';
-      } else {
-        todoEl.innerHTML = items.map(i =>
-          '<div class="todo-item ' + (i.type === 'FIXME' ? 'error' : i.type === 'HACK' ? 'warning' : '') + '" data-file="' + this.escapeHtml(i.file) + '" data-line="' + i.line + '">' +
-          '<strong>[' + i.type + ']</strong> ' + this.escapeHtml(i.text || '(empty)') +
-          ' <span style="color:var(--text-secondary)">— ' + i.file + ':' + i.line + '</span></div>'
-        ).join('');
-        todoEl.querySelectorAll('.todo-item').forEach(el => {
-          el.addEventListener('click', () => {
-            this.openFile(el.dataset.file);
-            setTimeout(() => Editor.revealLine(parseInt(el.dataset.line)), 200);
-          });
-        });
+        todoEl.innerHTML = `
+          <div class="panel-empty">
+            <strong>No TODOs found</strong>
+            <span>Use comments like % TODO: revise introduction or % FIXME: check equation.</span>
+          </div>
+        `;
+        return;
       }
+      const counts = items.reduce((acc, item) => {
+        acc[item.type] = (acc[item.type] || 0) + 1;
+        return acc;
+      }, {});
+      todoEl.innerHTML = `
+        <div class="outline-summary">
+          ${Object.keys(counts).sort().map((key) => `<span>${this.escapeHtml(key)} ${counts[key]}</span>`).join('')}
+        </div>
+        <section class="outline-group">
+          <div class="outline-group-title">Comment Tasks</div>
+          ${items.map((item) => `
+            <button class="todo-item ${item.type === 'FIXME' ? 'error' : item.type === 'HACK' ? 'warning' : ''}" type="button" data-file="${this.escapeHtml(item.file)}" data-line="${item.line}">
+              <span class="todo-kind">${this.escapeHtml(item.type)}</span>
+              <span class="outline-item-main">
+                <span class="outline-item-title">${this.escapeHtml(item.text || '(empty)')}</span>
+                <span class="outline-item-location">${this.escapeHtml(item.file)}:${item.line}</span>
+              </span>
+            </button>
+          `).join('')}
+        </section>
+      `;
+      this.bindStructureNavigation(todoEl);
     } catch (err) {
-      todoEl.innerHTML = '<div style="padding:8px;color:var(--error)">Error parsing TODOs</div>';
+      todoEl.innerHTML = `
+        <div class="panel-empty error">
+          <strong>Could not parse TODOs</strong>
+          <span>${this.escapeHtml(err.message || 'Unknown parser error')}</span>
+        </div>
+      `;
     }
   },
 
@@ -1242,6 +1501,8 @@ const App = {
     const commands = [
       { label: 'Compile project', hint: 'Ctrl+S', run: () => this.compile() },
       { label: 'Search project', hint: 'Ctrl+Shift+F', run: () => this.showSearchModal() },
+      { label: 'Show document outline', hint: 'Sections, labels, citations', run: () => document.querySelector('[data-tab="outline"]')?.click() },
+      { label: 'Show TODO list', hint: 'TODO, FIXME, HACK, NOTE', run: () => document.querySelector('[data-tab="todo"]')?.click() },
       { label: 'Project settings', hint: 'Compiler, main file', run: () => this.showProjectSettingsModal() },
       { label: 'Toggle PDF preview', hint: 'Editor / PDF', run: () => this.togglePreview() },
       { label: 'Open history', hint: 'Snapshots', run: () => this.showHistoryModal() },
@@ -1347,7 +1608,7 @@ const App = {
         if (!res.ok) throw new Error('File is not available in this snapshot');
         const content = await res.text();
         await api.put(`/projects/${this.currentProjectId}/files/${filePath}`, { content });
-        Editor.setValue(content);
+        Editor.setValue(content, { silent: true });
         this.notify('File restored from snapshot', 'success');
         overlay.remove();
       } catch (err) {

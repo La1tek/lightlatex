@@ -5,6 +5,7 @@ let currentFilePath = null;
 let autosaveTimer = null;
 let compileMarkers = [];
 let currentImageFiles = [];
+let suppressNextChange = false;
 
 const Editor = {
   get currentProjectId() {
@@ -46,6 +47,10 @@ const Editor = {
 
       // Autosave
       editor.onDidChangeModelContent(() => {
+        if (suppressNextChange) {
+          suppressNextChange = false;
+          return;
+        }
         if (options.onDirty) options.onDirty();
         clearTimeout(autosaveTimer);
         autosaveTimer = setTimeout(() => this.autosave(), 2000);
@@ -215,10 +220,11 @@ const Editor = {
     currentImageFiles = files || [];
   },
 
-  setValue(content) {
+  setValue(content, options = {}) {
     if (editor) {
       const model = editor.getModel();
       if (model) {
+        suppressNextChange = Boolean(options.silent);
         model.setValue(content);
       }
     }
