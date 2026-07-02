@@ -1419,6 +1419,10 @@ a:hover {
   overflow: hidden;
 }
 
+.snapshot-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
 .sync-modal,
 .conflicts-modal {
   width: min(940px, calc(100vw - 32px));

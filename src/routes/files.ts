@@ -3,7 +3,7 @@ import { authMiddleware, AuthRequest } from "../auth/middleware";
 import { db } from "../db";
 import { projects, files } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, zipSnapshot, ensureDir, getProjectDir, listSnapshots, getSnapshotFile, renameFile, resolveProjectPath } from "../storage/fs";
+import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, zipSnapshot, ensureDir, getProjectDir, createSnapshot, listSnapshots, listSnapshotDetails, getSnapshotFile, renameFile, resolveProjectPath } from "../storage/fs";
 import { syncFileRecords, upsertFileRecord } from "../storage/fileRegistry";
 import { p, pw } from "../utils";
 import multer from "multer";
@@ -307,6 +307,33 @@ router.get("/:id/history", async (req: AuthRequest, res: Response) => {
     res.json(snapshots);
   } catch (err: any) {
     res.status(404).json({ error: err.message });
+  }
+});
+
+router.get("/:id/history/details", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    await verifyProject(id, req.userId!);
+    const snapshots = await listSnapshotDetails(id);
+    res.json(snapshots);
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+router.post("/:id/history", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    await verifyProject(id, req.userId!);
+    const { name, message } = req.body || {};
+    const timestamp = await createSnapshot(id, {
+      type: "manual",
+      name: String(name || "Manual snapshot").trim(),
+      message: String(message || "").trim(),
+    });
+    res.status(201).json({ timestamp });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
   }
 });
 

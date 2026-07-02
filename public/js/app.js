@@ -328,6 +328,7 @@ const App = {
             <button class="btn btn-secondary btn-small" id="citation-manager-btn" title="Citation manager">${Icons.cite16} Cite</button>
             <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
             <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
+            <button class="btn btn-secondary btn-small" id="snapshot-btn" title="Create named snapshot">${Icons.save16} Snapshot</button>
             <button class="btn btn-secondary btn-small" id="settings-btn" title="Project settings">${Icons.settings} Settings</button>
             <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
             <button class="btn btn-secondary btn-small" id="preflight-btn" title="Run preflight check">${Icons.check14} Check</button>
@@ -554,6 +555,7 @@ const App = {
 
     // History/diff viewer
     document.getElementById('history-btn').addEventListener('click', () => this.showHistoryModal());
+    document.getElementById('snapshot-btn').addEventListener('click', () => this.showCreateSnapshotModal());
 
     // Autocompile toggle
     let autoCompileEnabled = false;
@@ -2611,6 +2613,7 @@ const App = {
       { label: 'Project settings', hint: 'Compiler, main file', run: () => this.showProjectSettingsModal() },
       { label: 'Toggle PDF preview', hint: 'Editor / PDF', run: () => this.togglePreview() },
       { label: 'Open history', hint: 'Snapshots', run: () => this.showHistoryModal() },
+      { label: 'Create named snapshot', hint: 'Manual version checkpoint', run: () => this.showCreateSnapshotModal() },
       { label: 'Download PDF', hint: 'output.pdf', run: () => this.downloadPdf() },
       { label: 'Download project ZIP', hint: '.zip', run: () => this.downloadProject() },
       { label: 'Toggle theme', hint: document.documentElement.dataset.theme === 'dark' ? 'Light' : 'Dark', run: () => this.toggleTheme() },
@@ -2657,6 +2660,59 @@ const App = {
     });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     input.focus();
+  },
+
+  showCreateSnapshotModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal snapshot-modal" role="dialog" aria-label="Create snapshot">
+        <h2>Create Snapshot</h2>
+        <form id="snapshot-form">
+          <div class="form-group">
+            <label for="snapshot-name">Name</label>
+            <input id="snapshot-name" type="text" value="Manual snapshot" autocomplete="off" required>
+          </div>
+          <div class="form-group">
+            <label for="snapshot-message">Note</label>
+            <textarea id="snapshot-message" rows="3" placeholder="Before reviewer changes, submission v1, etc."></textarea>
+            <div class="field-error" id="snapshot-error" role="alert"></div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" id="snapshot-cancel">Cancel</button>
+            <button class="btn btn-primary" type="submit" id="snapshot-create">${Icons.save16} Create snapshot</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#snapshot-cancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    overlay.querySelector('#snapshot-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const error = overlay.querySelector('#snapshot-error');
+      const create = overlay.querySelector('#snapshot-create');
+      error.textContent = '';
+      create.disabled = true;
+      create.innerHTML = `${Icons.clock14} Creating...`;
+      try {
+        if (Editor.currentFilePath) await Editor.autosave();
+        await api.post(`/projects/${this.currentProjectId}/history`, {
+          name: overlay.querySelector('#snapshot-name').value.trim() || 'Manual snapshot',
+          message: overlay.querySelector('#snapshot-message').value.trim(),
+        });
+        this.notify('Snapshot created', 'success');
+        close();
+      } catch (err) {
+        error.textContent = err.message;
+      } finally {
+        create.disabled = false;
+        create.innerHTML = `${Icons.save16} Create snapshot`;
+      }
+    });
+    overlay.querySelector('#snapshot-name').focus();
   },
 
   async showHistoryModal() {
@@ -2727,7 +2783,7 @@ const App = {
     };
 
     try {
-      const snapshots = await api.get(`/projects/${this.currentProjectId}/history`);
+      const snapshots = await this.loadSnapshotDetails();
       if (snapshots.length === 0) {
         timeline.innerHTML = `
           <div class="panel-empty">
@@ -2739,7 +2795,7 @@ const App = {
         downloadButton.disabled = true;
       } else {
         timeline.innerHTML = snapshots.map((snapshot, index) => `
-          <button class="history-snapshot ${index === 0 ? 'active' : ''}" type="button" data-snapshot="${this.escapeHtml(snapshot)}">
+          <button class="history-snapshot ${index === 0 ? 'active' : ''}" type="button" data-snapshot="${this.escapeHtml(snapshot.timestamp)}">
             <span>${this.escapeHtml(this.formatSnapshotLabel(snapshot))}</span>
             <small>${this.escapeHtml(this.snapshotMessage(snapshot, index))}</small>
           </button>
@@ -2752,7 +2808,7 @@ const App = {
             await loadSelectedDiff();
           });
         });
-        selectedSnapshot = snapshots[0];
+        selectedSnapshot = snapshots[0].timestamp;
         await loadSelectedDiff();
       }
     } catch (err) {
@@ -2805,7 +2861,25 @@ const App = {
     });
   },
 
-  formatSnapshotLabel(timestamp) {
+  async loadSnapshotDetails() {
+    try {
+      const details = await api.get(`/projects/${this.currentProjectId}/history/details`);
+      return details.map((item) => ({
+        timestamp: item.timestamp,
+        name: item.name || '',
+        message: item.message || '',
+        type: item.type || 'compile',
+        createdAt: item.createdAt || item.timestamp,
+      }));
+    } catch {
+      const snapshots = await api.get(`/projects/${this.currentProjectId}/history`);
+      return snapshots.map((timestamp) => ({ timestamp, type: 'compile', name: '', message: '', createdAt: timestamp }));
+    }
+  },
+
+  formatSnapshotLabel(snapshot) {
+    const timestamp = typeof snapshot === 'string' ? snapshot : snapshot.timestamp;
+    if (typeof snapshot === 'object' && snapshot.name) return snapshot.name;
     const parsed = this.parseSnapshotDate(timestamp);
     if (!parsed) return timestamp;
     return parsed.toLocaleString(undefined, {
@@ -2816,10 +2890,18 @@ const App = {
     });
   },
 
-  snapshotMessage(timestamp, index) {
+  snapshotMessage(snapshot, index) {
+    if (typeof snapshot === 'object' && snapshot.message) return snapshot.message;
+    const timestamp = typeof snapshot === 'string' ? snapshot : snapshot.timestamp;
+    if (typeof snapshot === 'object' && snapshot.type === 'manual') return this.formatSnapshotDate(timestamp);
     if (index === 0) return 'Latest successful compile';
     const parsed = this.parseSnapshotDate(timestamp);
     return parsed ? `Compile #${index + 1}` : timestamp;
+  },
+
+  formatSnapshotDate(timestamp) {
+    const parsed = this.parseSnapshotDate(timestamp);
+    return parsed ? parsed.toLocaleString() : timestamp;
   },
 
   parseSnapshotDate(timestamp) {
