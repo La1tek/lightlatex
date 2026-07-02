@@ -34,6 +34,19 @@ export const files = pgTable("files", {
   unique("unique_project_file").on(table.projectId, table.path),
 ]);
 
+export const projectCollaborators = pgTable("project_collaborators", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 20 }).notNull().default("viewer"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_project_collaborators_project").on(table.projectId),
+  index("idx_project_collaborators_user").on(table.userId),
+  unique("unique_project_collaborator").on(table.projectId, table.userId),
+]);
+
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -44,13 +57,20 @@ export const sessions = pgTable("sessions", {
 
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),
+  collaborations: many(projectCollaborators),
 }));
 
 export const projectsRelations = relations(projects, ({ many, one }) => ({
   user: one(users, { fields: [projects.userId], references: [users.id] }),
   files: many(files),
+  collaborators: many(projectCollaborators),
 }));
 
 export const filesRelations = relations(files, ({ one }) => ({
   project: one(projects, { fields: [files.projectId], references: [projects.id] }),
+}));
+
+export const projectCollaboratorsRelations = relations(projectCollaborators, ({ one }) => ({
+  project: one(projects, { fields: [projectCollaborators.projectId], references: [projects.id] }),
+  user: one(users, { fields: [projectCollaborators.userId], references: [users.id] }),
 }));

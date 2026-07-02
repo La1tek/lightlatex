@@ -1,10 +1,11 @@
 import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
 import { db } from "../db";
-import { projects, files } from "../db/schema";
+import { files } from "../db/schema";
 import { eq, and } from "drizzle-orm";
 import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, zipSnapshot, ensureDir, getProjectDir, createSnapshot, listSnapshots, listSnapshotDetails, getSnapshotFile, renameFile, resolveProjectPath } from "../storage/fs";
 import { syncFileRecords, upsertFileRecord } from "../storage/fileRegistry";
+import { ProjectAccessError, ProjectAccessRole, requireProjectAccess } from "../auth/projectAccess";
 import { p, pw } from "../utils";
 import multer from "multer";
 import fs from "fs/promises";
@@ -14,11 +15,13 @@ import crypto from "crypto";
 const router = Router();
 router.use(authMiddleware);
 
-async function verifyProject(projectId: string, userId: string) {
-  const [project] = await db.select().from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.userId, userId))).limit(1);
-  if (!project) throw new Error("Project not found");
-  return project;
+async function verifyProject(projectId: string, userId: string, required: ProjectAccessRole = "viewer") {
+  const access = await requireProjectAccess(projectId, userId, required);
+  return access.project;
+}
+
+function projectErrorStatus(err: any) {
+  return err instanceof ProjectAccessError ? err.status : err.message?.includes("not found") ? 404 : 400;
 }
 
 // List files
@@ -29,7 +32,7 @@ router.get("/:id/files", async (req: AuthRequest, res: Response) => {
     const list = await db.select().from(files).where(eq(files.projectId, id));
     res.json(list);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -37,7 +40,7 @@ router.get("/:id/files", async (req: AuthRequest, res: Response) => {
 router.post("/:id/files", async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    await verifyProject(id, req.userId!);
+    await verifyProject(id, req.userId!, "editor");
     const { path: filePath, content } = req.body;
     if (!filePath) return res.status(400).json({ error: "File path required" });
 
@@ -46,7 +49,7 @@ router.post("/:id/files", async (req: AuthRequest, res: Response) => {
 
     res.status(201).json(file);
   } catch (err: any) {
-    res.status(err.message.includes("not found") ? 404 : 400).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -75,7 +78,7 @@ router.get("/:id/files/*", async (req: AuthRequest, res: Response) => {
       res.type("text/plain").send(content);
     }
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -83,7 +86,7 @@ router.get("/:id/files/*", async (req: AuthRequest, res: Response) => {
 router.put("/:id/files/rename", async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    await verifyProject(id, req.userId!);
+    await verifyProject(id, req.userId!, "editor");
     const { oldPath, newPath } = req.body;
     if (!oldPath || !newPath) return res.status(400).json({ error: "oldPath and newPath required" });
 
@@ -93,7 +96,7 @@ router.put("/:id/files/rename", async (req: AuthRequest, res: Response) => {
 
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(err.message.includes("not found") ? 404 : 400).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -101,7 +104,7 @@ router.put("/:id/files/rename", async (req: AuthRequest, res: Response) => {
 router.put("/:id/files/*", async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    await verifyProject(id, req.userId!);
+    await verifyProject(id, req.userId!, "editor");
     const filePath = pw(req);
     const { content } = req.body;
     if (content === undefined) return res.status(400).json({ error: "Content required" });
@@ -111,7 +114,7 @@ router.put("/:id/files/*", async (req: AuthRequest, res: Response) => {
 
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(err.message.includes("not found") ? 404 : 400).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -119,7 +122,7 @@ router.put("/:id/files/*", async (req: AuthRequest, res: Response) => {
 router.delete("/:id/files/*", async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    await verifyProject(id, req.userId!);
+    await verifyProject(id, req.userId!, "editor");
     const filePath = pw(req);
 
     await deleteFile(id, filePath);
@@ -128,7 +131,7 @@ router.delete("/:id/files/*", async (req: AuthRequest, res: Response) => {
 
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -138,7 +141,7 @@ const upload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 50
 router.post("/:id/upload", upload.single("zip"), async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    await verifyProject(id, req.userId!);
+    await verifyProject(id, req.userId!, "editor");
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
     await extractZipToProject(id, req.file.path);
@@ -148,7 +151,7 @@ router.post("/:id/upload", upload.single("zip"), async (req: AuthRequest, res: R
     res.json({ ok: true });
   } catch (err: any) {
     if (req.file) await fs.unlink(req.file.path).catch(() => {});
-    res.status(400).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -162,7 +165,7 @@ router.get("/:id/download", async (req: AuthRequest, res: Response) => {
     res.setHeader("Content-Disposition", `attachment; filename="project.zip"`);
     res.send(zipBuffer);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -173,7 +176,7 @@ const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'im
 router.post("/:id/upload-image", imageUpload.single('image'), async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    await verifyProject(id, req.userId!);
+    await verifyProject(id, req.userId!, "editor");
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     if (!ALLOWED_IMAGE_TYPES.has(req.file.mimetype)) {
       await fs.unlink(req.file.path);
@@ -193,7 +196,7 @@ router.post("/:id/upload-image", imageUpload.single('image'), async (req: AuthRe
     res.json({ ok: true, path: filePath, name: originalName });
   } catch (err: any) {
     if (req.file) await fs.unlink(req.file.path).catch(() => {});
-    res.status(400).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -209,7 +212,7 @@ router.get("/:id/images", async (req: AuthRequest, res: Response) => {
       .map(f => ({ path: f.path, name: f.path.replace('images/', '') }));
     res.json(imageList);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -232,7 +235,7 @@ router.get("/:id/files-with-hashes", async (req: AuthRequest, res: Response) => 
     }
     res.json(result);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -240,7 +243,7 @@ router.get("/:id/files-with-hashes", async (req: AuthRequest, res: Response) => 
 router.post("/:id/sync", async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    await verifyProject(id, req.userId!);
+    await verifyProject(id, req.userId!, "editor");
     const clientFiles: Array<{path: string; content: string; hash: string}> = req.body;
     if (!Array.isArray(clientFiles)) return res.status(400).json({ error: "Expected array of files" });
 
@@ -294,7 +297,7 @@ router.post("/:id/sync", async (req: AuthRequest, res: Response) => {
 
     res.json({ pushed, pulled, conflicts });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -306,7 +309,7 @@ router.get("/:id/history", async (req: AuthRequest, res: Response) => {
     const snapshots = await listSnapshots(id);
     res.json(snapshots);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -317,14 +320,14 @@ router.get("/:id/history/details", async (req: AuthRequest, res: Response) => {
     const snapshots = await listSnapshotDetails(id);
     res.json(snapshots);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
 router.post("/:id/history", async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    await verifyProject(id, req.userId!);
+    await verifyProject(id, req.userId!, "editor");
     const { name, message } = req.body || {};
     const timestamp = await createSnapshot(id, {
       type: "manual",
@@ -333,7 +336,7 @@ router.post("/:id/history", async (req: AuthRequest, res: Response) => {
     });
     res.status(201).json({ timestamp });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -347,7 +350,7 @@ router.get("/:id/history/:timestamp/download", async (req: AuthRequest, res: Res
     res.setHeader("Content-Disposition", `attachment; filename="snapshot-${timestamp}.zip"`);
     res.send(zipBuffer);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -362,7 +365,7 @@ router.get("/:id/history/:timestamp/files/*", async (req: AuthRequest, res: Resp
     const content = await getSnapshotFile(id, timestamp, filePath);
     res.type("text/plain").send(content);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(projectErrorStatus(err)).json({ error: err.message });
   }
 });
 

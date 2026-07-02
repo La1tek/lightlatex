@@ -1,15 +1,17 @@
 import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
 import { db } from "../db";
-import { projects, files } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { projects, files, projectCollaborators, users } from "../db/schema";
+import { eq, and, asc } from "drizzle-orm";
 import { ensureProjectDir, removeProjectDir, writeFile, readFile } from "../storage/fs";
 import { syncFileRecords } from "../storage/fileRegistry";
+import { ProjectAccessError, requireProjectAccess } from "../auth/projectAccess";
 import { applyTemplate } from "./templates";
 import { p } from "../utils";
 
 const router = Router();
 const ALLOWED_COMPILERS = new Set(["pdflatex", "xelatex", "lualatex"]);
+const COLLABORATOR_ROLES = new Set(["viewer", "editor"]);
 router.use(authMiddleware);
 
 function getCompiler(value: unknown): string {
@@ -28,8 +30,47 @@ function isSafeMainFile(value: unknown): value is string {
     && !value.split(/[\\/]+/).includes("..");
 }
 
+function accessError(res: Response, err: any) {
+  const status = err instanceof ProjectAccessError ? err.status : 404;
+  res.status(status).json({ error: err.message || "Project not found" });
+}
+
+function validateCollaboratorRole(value: unknown): "viewer" | "editor" {
+  const role = typeof value === "string" ? value.trim() : "viewer";
+  if (!COLLABORATOR_ROLES.has(role)) {
+    throw new Error("Role must be viewer or editor");
+  }
+  return role as "viewer" | "editor";
+}
+
 router.get("/", async (req: AuthRequest, res: Response) => {
-  const list = await db.select().from(projects).where(eq(projects.userId, req.userId!));
+  const owned = await db.select().from(projects).where(eq(projects.userId, req.userId!));
+  const sharedRows = await db.select({
+    project: projects,
+    role: projectCollaborators.role,
+    ownerEmail: users.email,
+    ownerName: users.name,
+  })
+    .from(projectCollaborators)
+    .innerJoin(projects, eq(projectCollaborators.projectId, projects.id))
+    .innerJoin(users, eq(projects.userId, users.id))
+    .where(eq(projectCollaborators.userId, req.userId!));
+
+  const list = [
+    ...owned.map((project) => ({
+      ...project,
+      accessRole: "owner",
+      ownerEmail: null,
+      ownerName: null,
+    })),
+    ...sharedRows.map((row) => ({
+      ...row.project,
+      accessRole: row.role,
+      ownerEmail: row.ownerEmail,
+      ownerName: row.ownerName,
+    })),
+  ].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
   res.json(list);
 });
 
@@ -71,18 +112,31 @@ router.post("/", async (req: AuthRequest, res: Response) => {
 });
 
 router.get("/:id", async (req: AuthRequest, res: Response) => {
-  const id = p(req, "id");
-  const [project] = await db.select().from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, req.userId!))).limit(1);
-  if (!project) return res.status(404).json({ error: "Project not found" });
-  res.json(project);
+  try {
+    const id = p(req, "id");
+    const access = await requireProjectAccess(id, req.userId!, "viewer");
+    const [owner] = await db.select({ email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.id, access.project.userId))
+      .limit(1);
+    res.json({
+      ...access.project,
+      accessRole: access.role,
+      ownerEmail: owner?.email || null,
+      ownerName: owner?.name || null,
+    });
+  } catch (err: any) {
+    accessError(res, err);
+  }
 });
 
 router.put("/:id", async (req: AuthRequest, res: Response) => {
   const id = p(req, "id");
-  const [existing] = await db.select().from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, req.userId!))).limit(1);
-  if (!existing) return res.status(404).json({ error: "Project not found" });
+  try {
+    await requireProjectAccess(id, req.userId!, "owner");
+  } catch (err: any) {
+    return accessError(res, err);
+  }
 
   const { name, description, compiler, mainFile } = req.body;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -107,13 +161,120 @@ router.put("/:id", async (req: AuthRequest, res: Response) => {
 
 router.delete("/:id", async (req: AuthRequest, res: Response) => {
   const id = p(req, "id");
-  const [existing] = await db.select().from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, req.userId!))).limit(1);
-  if (!existing) return res.status(404).json({ error: "Project not found" });
+  try {
+    await requireProjectAccess(id, req.userId!, "owner");
+  } catch (err: any) {
+    return accessError(res, err);
+  }
 
   await db.delete(projects).where(eq(projects.id, id));
   await removeProjectDir(id);
   res.json({ ok: true });
+});
+
+// Project collaborators
+router.get("/:id/collaborators", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    const access = await requireProjectAccess(id, req.userId!, "owner");
+    const [owner] = await db.select({ id: users.id, email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.id, access.project.userId))
+      .limit(1);
+    const collaborators = await db.select({
+      id: projectCollaborators.id,
+      userId: users.id,
+      email: users.email,
+      name: users.name,
+      role: projectCollaborators.role,
+      createdAt: projectCollaborators.createdAt,
+      updatedAt: projectCollaborators.updatedAt,
+    })
+      .from(projectCollaborators)
+      .innerJoin(users, eq(projectCollaborators.userId, users.id))
+      .where(eq(projectCollaborators.projectId, id))
+      .orderBy(asc(users.email));
+
+    res.json({
+      owner: owner ? { ...owner, role: "owner" } : null,
+      collaborators,
+    });
+  } catch (err: any) {
+    accessError(res, err);
+  }
+});
+
+router.post("/:id/collaborators", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    const access = await requireProjectAccess(id, req.userId!, "owner");
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: "Email required" });
+    const role = validateCollaboratorRole(req.body?.role);
+
+    const [targetUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (!targetUser) return res.status(404).json({ error: "User not found" });
+    if (targetUser.id === access.project.userId) {
+      return res.status(400).json({ error: "Project owner already has owner access" });
+    }
+
+    const [existing] = await db.select().from(projectCollaborators)
+      .where(and(eq(projectCollaborators.projectId, id), eq(projectCollaborators.userId, targetUser.id)))
+      .limit(1);
+
+    const [collaborator] = existing
+      ? await db.update(projectCollaborators)
+        .set({ role, updatedAt: new Date() })
+        .where(eq(projectCollaborators.id, existing.id))
+        .returning()
+      : await db.insert(projectCollaborators)
+        .values({ projectId: id, userId: targetUser.id, role })
+        .returning();
+
+    res.status(existing ? 200 : 201).json({
+      id: collaborator.id,
+      userId: targetUser.id,
+      email: targetUser.email,
+      name: targetUser.name,
+      role: collaborator.role,
+      createdAt: collaborator.createdAt,
+      updatedAt: collaborator.updatedAt,
+    });
+  } catch (err: any) {
+    if (err instanceof ProjectAccessError) return accessError(res, err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.put("/:id/collaborators/:collaboratorId", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    await requireProjectAccess(id, req.userId!, "owner");
+    const collaboratorId = String(req.params.collaboratorId);
+    const role = validateCollaboratorRole(req.body?.role);
+    const [updated] = await db.update(projectCollaborators)
+      .set({ role, updatedAt: new Date() })
+      .where(and(eq(projectCollaborators.id, collaboratorId), eq(projectCollaborators.projectId, id)))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Collaborator not found" });
+    res.json(updated);
+  } catch (err: any) {
+    if (err instanceof ProjectAccessError) return accessError(res, err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete("/:id/collaborators/:collaboratorId", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    await requireProjectAccess(id, req.userId!, "owner");
+    const collaboratorId = String(req.params.collaboratorId);
+    await db.delete(projectCollaborators)
+      .where(and(eq(projectCollaborators.id, collaboratorId), eq(projectCollaborators.projectId, id)));
+    res.json({ ok: true });
+  } catch (err: any) {
+    accessError(res, err);
+  }
 });
 
 // Cross-file search
@@ -123,9 +284,7 @@ router.get("/:id/search", async (req: AuthRequest, res: Response) => {
     const q = (req.query.q as string || "").trim();
     if (!q) return res.status(400).json({ error: "Query required" });
 
-    const [project] = await db.select().from(projects)
-      .where(and(eq(projects.id, id), eq(projects.userId, req.userId!))).limit(1);
-    if (!project) return res.status(404).json({ error: "Project not found" });
+    await requireProjectAccess(id, req.userId!, "viewer");
 
     const fileList = await db.select().from(files).where(eq(files.projectId, id));
     const results: Array<{ file: string; line: number; content: string }> = [];
@@ -150,7 +309,7 @@ router.get("/:id/search", async (req: AuthRequest, res: Response) => {
 
     res.json(results);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    accessError(res, err);
   }
 });
 

@@ -15,6 +15,7 @@ const App = {
   syncState: 'synced',
   syncConflicts: [],
   devMode: false,
+  accessRole: 'owner',
 
   async init() {
     const theme = localStorage.getItem('theme') || 'light';
@@ -42,6 +43,67 @@ const App = {
     } else {
       this.showDashboard(app);
     }
+  },
+
+  projectRole() {
+    return this.currentProject?.accessRole || this.accessRole || 'owner';
+  },
+
+  canEditProject() {
+    return ['owner', 'editor'].includes(this.projectRole());
+  },
+
+  canManageProject() {
+    return this.projectRole() === 'owner';
+  },
+
+  roleLabel(role = this.projectRole()) {
+    return role === 'owner' ? 'Owner' : role === 'editor' ? 'Editor' : 'Viewer';
+  },
+
+  ensureCanEdit(action = 'edit this project') {
+    if (this.canEditProject()) return true;
+    this.notify(`Viewer access is read-only. Ask the owner for editor access to ${action}.`, 'error');
+    return false;
+  },
+
+  ensureCanManage(action = 'manage this project') {
+    if (this.canManageProject()) return true;
+    this.notify(`Only the project owner can ${action}.`, 'error');
+    return false;
+  },
+
+  applyProjectPermissions() {
+    const role = this.projectRole();
+    const canEdit = this.canEditProject();
+    const badge = document.getElementById('editor-access-badge');
+    if (badge) {
+      badge.textContent = this.roleLabel(role);
+      badge.className = `access-badge ${role}`;
+    }
+
+    document.querySelector('.editor-layout')?.classList.toggle('read-only', !canEdit);
+    this.fileTree?.setReadOnly(!canEdit);
+    Editor.setReadOnly?.(!canEdit);
+
+    const editButtons = [
+      'new-file-btn',
+      'compile-btn',
+      'upload-image-btn',
+      'autocompile-btn',
+      'snapshot-btn',
+      'symbols-btn',
+      'citation-manager-btn',
+    ];
+    for (const id of editButtons) {
+      const button = document.getElementById(id);
+      if (!button) continue;
+      button.disabled = !canEdit;
+      if (!canEdit) button.title = 'Read-only viewer access';
+    }
+
+    const saveState = document.getElementById('save-state');
+    if (saveState && !canEdit) saveState.textContent = 'Read-only';
   },
 
   // ===== Dashboard =====
@@ -158,6 +220,13 @@ const App = {
         const grid = document.getElementById('project-grid');
 
         for (const p of filtered) {
+          const role = p.accessRole || 'owner';
+          const deleteButton = role === 'owner'
+            ? `<button class="btn btn-danger btn-small" data-delete="${p.id}" title="Delete project" aria-label="Delete ${this.escapeHtml(p.name)}">${Icons.trash}</button>`
+            : '';
+          const ownerMeta = p.ownerEmail
+            ? `<span>${Icons.user} ${this.escapeHtml(p.ownerName || p.ownerEmail)}</span>`
+            : '';
           const card = document.createElement('article');
           card.className = 'project-card';
           card.tabIndex = 0;
@@ -165,22 +234,24 @@ const App = {
             <div class="project-card-header">
               <span class="project-card-icon">${Icons.fileTex}</span>
               <h3>${this.escapeHtml(p.name)}</h3>
+              <span class="badge role-badge ${role}">${this.roleLabel(role)}</span>
             </div>
             <div class="desc">${this.escapeHtml(p.description || 'No description')}</div>
             <div class="meta">
               <span>${Icons.wrench} ${this.escapeHtml(p.compiler || 'pdflatex')}</span>
+              ${ownerMeta}
               <span>${new Date(p.updatedAt).toLocaleDateString()}</span>
             </div>
             <div class="actions">
               <button class="btn btn-secondary btn-small" data-open="${p.id}">Open</button>
-              <button class="btn btn-danger btn-small" data-delete="${p.id}" title="Delete project" aria-label="Delete ${this.escapeHtml(p.name)}">${Icons.trash}</button>
+              ${deleteButton}
             </div>
           `;
           card.querySelector('[data-open]').addEventListener('click', (e) => {
             e.stopPropagation();
             window.location.hash = `#/project/${p.id}`;
           });
-          card.querySelector('[data-delete]').addEventListener('click', async (e) => {
+          card.querySelector('[data-delete]')?.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (confirm('Delete this project and all its files?')) {
               await api.del(`/projects/${p.id}`);
@@ -307,6 +378,7 @@ const App = {
     this.currentProjectId = projectId;
     Editor.dispose();
     Preview.clear();
+    this.fileTree = null;
     this.devMode = localStorage.getItem('lighttex-dev-mode') === 'true';
 
     const currentTheme = document.documentElement.dataset.theme;
@@ -317,6 +389,7 @@ const App = {
           <div class="editor-toolbar-left">
             <a href="#/" class="btn-icon" title="Back to dashboard" aria-label="Back to dashboard">${Icons.backArrow16}</a>
             <span class="project-name" id="editor-project-name">Loading...</span>
+            <span class="access-badge owner" id="editor-access-badge">Owner</span>
           </div>
           <div class="editor-toolbar-center">
             <button class="compile-status" id="compile-status" type="button" title="Compile status">${Icons.play16} Idle</button>
@@ -414,7 +487,9 @@ const App = {
     try {
       project = await api.get(`/projects/${projectId}`);
       this.currentProject = project;
+      this.accessRole = project.accessRole || 'owner';
       document.getElementById('editor-project-name').textContent = project.name;
+      this.applyProjectPermissions();
     } catch {
       container.innerHTML = `<div class="empty-state"><div class="icon">${Icons.xCircle}</div><p>Project not found</p></div>`;
       return;
@@ -460,6 +535,7 @@ const App = {
       onDelete: (path) => this.deleteFile(path),
       onRename: (oldPath, newPath) => this.renameFile(oldPath, newPath),
       devMode: this.devMode,
+      readOnly: !this.canEditProject(),
     });
     this.fileTree.setFiles(this.projectFiles);
     this.refreshFileHashes();
@@ -488,6 +564,7 @@ const App = {
         this.queueStructureRefresh();
       },
       onCompile: () => this.compile(),
+      readOnly: !this.canEditProject(),
     });
 
     // Init preview
@@ -528,6 +605,7 @@ const App = {
     document.getElementById('pdf-zoom-out').addEventListener('click', async () => { await Preview.zoomOut(); this.updatePdfPageInfo(); });
     document.getElementById('pdf-zoom-in').addEventListener('click', async () => { await Preview.zoomIn(); this.updatePdfPageInfo(); });
     document.getElementById('compile-panel-close').addEventListener('click', () => this.closeCompilePanel());
+    this.applyProjectPermissions();
     document.querySelectorAll('[data-log-tab]').forEach((btn) => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('[data-log-tab]').forEach((tab) => tab.classList.remove('active'));
@@ -561,6 +639,7 @@ const App = {
     let autoCompileEnabled = false;
     let autoCompileTimer = null;
     document.getElementById('autocompile-btn').addEventListener('click', () => {
+      if (!this.ensureCanEdit('use auto-compile')) return;
       autoCompileEnabled = !autoCompileEnabled;
       document.getElementById('autocompile-btn').classList.toggle('active', autoCompileEnabled);
       this.notify(autoCompileEnabled ? 'Auto-compile ON (compiles 3s after save)' : 'Auto-compile OFF', 'info');
@@ -570,6 +649,10 @@ const App = {
     const origAutosave = Editor.autosave.bind(Editor);
     Editor.autosave = async () => {
       const saveState = document.getElementById('save-state');
+      if (!this.canEditProject()) {
+        if (saveState) saveState.textContent = 'Read-only';
+        return;
+      }
       if (saveState) saveState.textContent = 'Saving...';
       await origAutosave();
       if (saveState) saveState.textContent = 'Saved just now';
@@ -598,6 +681,7 @@ const App = {
     editorPane.addEventListener('drop', async (e) => {
       e.preventDefault();
       editorPane.classList.remove('drag-over');
+      if (!this.ensureCanEdit('upload assets')) return;
       if (e.dataTransfer.files.length > 0) {
         await this.uploadImages(e.dataTransfer.files);
       }
@@ -605,27 +689,32 @@ const App = {
 
     // Update project title on rename
     const nameEl = document.getElementById('editor-project-name');
-    nameEl.contentEditable = true;
-    nameEl.addEventListener('blur', async () => {
-      const newName = nameEl.textContent.trim();
-      if (newName && newName !== project.name) {
-        try {
-          await api.put(`/projects/${projectId}`, { name: newName });
-          project.name = newName;
-        } catch {
-          nameEl.textContent = project.name;
+    nameEl.contentEditable = this.canManageProject() ? 'true' : 'false';
+    if (this.canManageProject()) {
+      nameEl.addEventListener('blur', async () => {
+        const newName = nameEl.textContent.trim();
+        if (newName && newName !== project.name) {
+          try {
+            await api.put(`/projects/${projectId}`, { name: newName });
+            project.name = newName;
+          } catch {
+            nameEl.textContent = project.name;
+          }
         }
-      }
-    });
-    nameEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
-    });
+      });
+      nameEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+      });
+    } else {
+      nameEl.title = `Shared project · ${this.roleLabel()}`;
+    }
 
     this.bindEditorShortcuts();
     this.refreshCitationCache();
   },
 
   async uploadImages(fileList) {
+    if (!this.ensureCanEdit('upload assets')) return;
     if (!fileList || fileList.length === 0) return;
     const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'application/pdf'];
     for (const file of fileList) {
@@ -662,6 +751,7 @@ const App = {
   },
 
   async showAssetManager() {
+    const canEdit = this.canEditProject();
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay asset-overlay';
     overlay.innerHTML = `
@@ -674,7 +764,7 @@ const App = {
           <button class="btn-icon" type="button" id="asset-close" title="Close assets" aria-label="Close assets">${Icons.x}</button>
         </div>
         <div class="asset-toolbar">
-          <button class="btn btn-secondary btn-small" type="button" id="asset-upload">${Icons.upload16} Upload</button>
+          <button class="btn btn-secondary btn-small" type="button" id="asset-upload" ${canEdit ? '' : 'disabled title="Read-only viewer access"'}>${Icons.upload16} Upload</button>
           <button class="btn btn-secondary btn-small" type="button" id="asset-refresh">${Icons.clock14} Refresh</button>
         </div>
         <div class="asset-grid" id="asset-grid">
@@ -722,9 +812,9 @@ const App = {
               <code title="${this.escapeHtml(asset.path)}">${this.escapeHtml(asset.path)}</code>
             </div>
             <div class="asset-actions">
-              <button class="btn btn-secondary btn-small" type="button" data-asset-insert="${index}">Insert</button>
+              ${canEdit ? `<button class="btn btn-secondary btn-small" type="button" data-asset-insert="${index}">Insert</button>` : ''}
               <button class="btn btn-secondary btn-small" type="button" data-asset-copy="${index}">Copy</button>
-              <button class="btn btn-danger btn-small" type="button" data-asset-delete="${index}" title="Delete asset" aria-label="Delete ${this.escapeHtml(asset.name)}">${Icons.trash14}</button>
+              ${canEdit ? `<button class="btn btn-danger btn-small" type="button" data-asset-delete="${index}" title="Delete asset" aria-label="Delete ${this.escapeHtml(asset.name)}">${Icons.trash14}</button>` : ''}
             </div>
           </article>
         `).join('');
@@ -778,7 +868,10 @@ const App = {
     };
 
     overlay.querySelector('#asset-close').addEventListener('click', close);
-    overlay.querySelector('#asset-upload').addEventListener('click', () => input.click());
+    overlay.querySelector('#asset-upload').addEventListener('click', () => {
+      if (!this.ensureCanEdit('upload assets')) return;
+      input.click();
+    });
     overlay.querySelector('#asset-refresh').addEventListener('click', render);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
@@ -902,6 +995,7 @@ const App = {
   },
 
   async showCitationManager() {
+    const canEdit = this.canEditProject();
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay citation-overlay';
     overlay.innerHTML = `
@@ -921,7 +1015,7 @@ const App = {
           <select id="citation-command" aria-label="Citation command">
             ${['cite', 'citep', 'citet', 'parencite', 'textcite', 'autocite'].map((command) => `<option value="${command}">\\${command}{}</option>`).join('')}
           </select>
-          <button class="btn btn-secondary btn-small" type="button" id="citation-add">${Icons.plus16} Add</button>
+          <button class="btn btn-secondary btn-small" type="button" id="citation-add" ${canEdit ? '' : 'disabled title="Read-only viewer access"'}>${Icons.plus16} Add</button>
           <button class="btn btn-secondary btn-small" type="button" id="citation-refresh">${Icons.clock14} Refresh</button>
         </div>
         <div class="citation-summary" id="citation-summary"></div>
@@ -940,6 +1034,7 @@ const App = {
     let entries = [];
 
     const insertEntry = (entry) => {
+      if (!this.ensureCanEdit('insert citations')) return;
       Editor.insertText(`\\${commandSelect.value}{${entry.key}}`);
       close();
     };
@@ -984,7 +1079,7 @@ const App = {
             </div>
           </div>
           <div class="citation-row-actions">
-            <button class="btn btn-primary btn-small" type="button" data-citation-insert="${index}">Insert</button>
+            <button class="btn btn-primary btn-small" type="button" data-citation-insert="${index}" ${canEdit ? '' : 'disabled title="Read-only viewer access"'}>Insert</button>
             <button class="btn btn-secondary btn-small" type="button" data-citation-copy="${index}">Copy key</button>
             <button class="btn btn-secondary btn-small" type="button" data-citation-open="${index}">Open</button>
           </div>
@@ -1023,10 +1118,13 @@ const App = {
 
     overlay.querySelector('#citation-close').addEventListener('click', close);
     overlay.querySelector('#citation-refresh').addEventListener('click', () => refresh());
-    overlay.querySelector('#citation-add').addEventListener('click', () => this.showBibEntryModal(async () => {
+    overlay.querySelector('#citation-add').addEventListener('click', () => {
+      if (!this.ensureCanEdit('add bibliography entries')) return;
+      this.showBibEntryModal(async () => {
       entries = await this.refreshCitationCache({ notify: true });
       render();
-    }));
+      });
+    });
     input.addEventListener('input', render);
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') close();
@@ -1042,6 +1140,7 @@ const App = {
   },
 
   showBibEntryModal(onSaved) {
+    if (!this.ensureCanEdit('add bibliography entries')) return;
     const bibFiles = this.projectFiles.filter((file) => file.path.endsWith('.bib')).map((file) => file.path);
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -1141,6 +1240,7 @@ const App = {
   },
 
   async promptNewFile() {
+    if (!this.ensureCanEdit('create files')) return;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
@@ -1214,6 +1314,7 @@ const App = {
   },
 
   async deleteFile(path) {
+    if (!this.ensureCanEdit('delete files')) return;
     if (!confirm(`Delete "${path}"?`)) return;
 
     try {
@@ -1237,6 +1338,7 @@ const App = {
   },
 
   async compile() {
+    if (!this.ensureCanEdit('compile this project')) return;
     if (this.isCompiling) return;
     this.isCompiling = true;
 
@@ -2262,6 +2364,7 @@ const App = {
   },
 
   async renameFile(oldPath, newPath) {
+    if (!this.ensureCanEdit('rename files')) return;
     if (!newPath) {
       this.showRenameFileModal(oldPath);
       return;
@@ -2330,6 +2433,8 @@ const App = {
 
   showProjectSettingsModal() {
     const project = this.currentProject || {};
+    const canManage = this.canManageProject();
+    const disabled = canManage ? '' : 'disabled';
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
@@ -2339,25 +2444,49 @@ const App = {
           <div class="form-grid two-col">
             <div class="form-group">
               <label for="settings-name">Name</label>
-              <input id="settings-name" type="text" value="${this.escapeHtml(project.name || '')}" required>
+              <input id="settings-name" type="text" value="${this.escapeHtml(project.name || '')}" required ${disabled}>
             </div>
             <div class="form-group">
               <label for="settings-compiler">Compiler</label>
-              <select id="settings-compiler">
+              <select id="settings-compiler" ${disabled}>
                 ${['pdflatex', 'xelatex', 'lualatex'].map(c => `<option value="${c}" ${project.compiler === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>
           </div>
           <div class="form-group">
             <label for="settings-description">Description</label>
-            <textarea id="settings-description" rows="3">${this.escapeHtml(project.description || '')}</textarea>
+            <textarea id="settings-description" rows="3" ${disabled}>${this.escapeHtml(project.description || '')}</textarea>
           </div>
           <div class="form-group">
             <label for="settings-main-file">Main file</label>
-            <select id="settings-main-file">
+            <select id="settings-main-file" ${disabled}>
               ${this.projectFiles.filter(f => f.path.endsWith('.tex')).map(f => `<option value="${this.escapeHtml(f.path)}" ${project.mainFile === f.path ? 'selected' : ''}>${this.escapeHtml(f.path)}</option>`).join('')}
             </select>
           </div>
+          <div class="settings-section">
+            <h3>Access</h3>
+            <div class="settings-access-row">
+              <span class="access-badge ${this.projectRole()}">${this.roleLabel()}</span>
+              <span>${project.ownerEmail ? `Owner: ${this.escapeHtml(project.ownerName || project.ownerEmail)}` : 'You own this project'}</span>
+            </div>
+          </div>
+          ${canManage ? `
+            <div class="settings-section" id="sharing-section">
+              <h3>Sharing</h3>
+              <div class="share-add-row">
+                <input id="share-email" type="email" placeholder="collaborator@example.com" autocomplete="off">
+                <select id="share-role">
+                  <option value="viewer">Viewer</option>
+                  <option value="editor">Editor</option>
+                </select>
+                <button class="btn btn-secondary btn-small" type="button" id="share-add">${Icons.plus16} Add</button>
+              </div>
+              <div class="field-error" id="share-error" role="alert"></div>
+              <div class="share-list" id="share-list">
+                <div class="panel-loading">Loading collaborators...</div>
+              </div>
+            </div>
+          ` : ''}
           <div class="settings-section">
             <h3>CLI access</h3>
             <div class="copy-row">
@@ -2368,7 +2497,7 @@ const App = {
           <div class="field-error" id="settings-error" role="alert"></div>
           <div class="modal-actions">
             <button class="btn btn-secondary" type="button" id="settings-cancel">Cancel</button>
-            <button class="btn btn-primary" type="submit" id="settings-save">Save settings</button>
+            ${canManage ? '<button class="btn btn-primary" type="submit" id="settings-save">Save settings</button>' : ''}
           </div>
         </form>
       </div>
@@ -2386,8 +2515,100 @@ const App = {
         this.notify('Could not copy command automatically', 'error');
       }
     });
+    if (canManage) {
+      const renderSharing = async () => {
+        const list = overlay.querySelector('#share-list');
+        list.innerHTML = '<div class="panel-loading">Loading collaborators...</div>';
+        try {
+          const payload = await api.get(`/projects/${this.currentProjectId}/collaborators`);
+          const owner = payload.owner;
+          const collaborators = payload.collaborators || [];
+          list.innerHTML = `
+            ${owner ? `
+              <div class="share-row owner">
+                <span>
+                  <strong>${this.escapeHtml(owner.email)}</strong>
+                  <small>${this.escapeHtml(owner.name || 'Project owner')}</small>
+                </span>
+                <span class="access-badge owner">Owner</span>
+              </div>
+            ` : ''}
+            ${collaborators.length === 0 ? `
+              <div class="panel-empty compact">
+                <strong>No collaborators</strong>
+                <span>Add registered users by email.</span>
+              </div>
+            ` : collaborators.map((item) => `
+              <div class="share-row" data-collaborator="${this.escapeHtml(item.id)}">
+                <span>
+                  <strong>${this.escapeHtml(item.email)}</strong>
+                  <small>${this.escapeHtml(item.name || 'Registered user')}</small>
+                </span>
+                <select data-share-role="${this.escapeHtml(item.id)}">
+                  <option value="viewer" ${item.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                  <option value="editor" ${item.role === 'editor' ? 'selected' : ''}>Editor</option>
+                </select>
+                <button class="btn btn-danger btn-small" type="button" data-share-remove="${this.escapeHtml(item.id)}">${Icons.trash14}</button>
+              </div>
+            `).join('')}
+          `;
+
+          list.querySelectorAll('[data-share-role]').forEach((select) => {
+            select.addEventListener('change', async () => {
+              try {
+                await api.put(`/projects/${this.currentProjectId}/collaborators/${select.dataset.shareRole}`, { role: select.value });
+                this.notify('Collaborator role updated', 'success');
+              } catch (err) {
+                this.notify('Role update failed: ' + err.message, 'error');
+                renderSharing();
+              }
+            });
+          });
+          list.querySelectorAll('[data-share-remove]').forEach((button) => {
+            button.addEventListener('click', async () => {
+              if (!confirm('Remove this collaborator?')) return;
+              try {
+                await api.del(`/projects/${this.currentProjectId}/collaborators/${button.dataset.shareRemove}`);
+                this.notify('Collaborator removed', 'success');
+                renderSharing();
+              } catch (err) {
+                this.notify('Remove failed: ' + err.message, 'error');
+              }
+            });
+          });
+        } catch (err) {
+          list.innerHTML = `
+            <div class="panel-empty error">
+              <strong>Could not load collaborators</strong>
+              <span>${this.escapeHtml(err.message || 'Unknown sharing error')}</span>
+            </div>
+          `;
+        }
+      };
+
+      overlay.querySelector('#share-add').addEventListener('click', async () => {
+        const email = overlay.querySelector('#share-email').value.trim();
+        const role = overlay.querySelector('#share-role').value;
+        const error = overlay.querySelector('#share-error');
+        error.textContent = '';
+        if (!email) {
+          error.textContent = 'Email required.';
+          return;
+        }
+        try {
+          await api.post(`/projects/${this.currentProjectId}/collaborators`, { email, role });
+          overlay.querySelector('#share-email').value = '';
+          this.notify('Collaborator added', 'success');
+          renderSharing();
+        } catch (err) {
+          error.textContent = err.message;
+        }
+      });
+      renderSharing();
+    }
     overlay.querySelector('#project-settings-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (!this.ensureCanManage('save project settings')) return;
       const error = overlay.querySelector('#settings-error');
       const save = overlay.querySelector('#settings-save');
       error.textContent = '';
@@ -2411,7 +2632,7 @@ const App = {
         save.innerHTML = 'Save settings';
       }
     });
-    overlay.querySelector('#settings-name').focus();
+    overlay.querySelector(canManage ? '#settings-name' : '#copy-cli-command').focus();
   },
 
   bindEditorShortcuts() {
@@ -2436,6 +2657,7 @@ const App = {
   },
 
   showSymbolsPalette() {
+    if (!this.ensureCanEdit('insert symbols')) return;
     const groups = [
       {
         id: 'greek',
@@ -2663,6 +2885,7 @@ const App = {
   },
 
   showCreateSnapshotModal() {
+    if (!this.ensureCanEdit('create snapshots')) return;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `

@@ -65,6 +65,17 @@ async function bootstrap() {
         UNIQUE(project_id, path)
       );
       CREATE INDEX IF NOT EXISTS idx_files_project ON files(project_id);
+      CREATE TABLE IF NOT EXISTS project_collaborators (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role VARCHAR(20) NOT NULL DEFAULT 'viewer',
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now(),
+        UNIQUE(project_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_project_collaborators_project ON project_collaborators(project_id);
+      CREATE INDEX IF NOT EXISTS idx_project_collaborators_user ON project_collaborators(user_id);
       CREATE TABLE IF NOT EXISTS sessions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

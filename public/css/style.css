@@ -769,6 +769,7 @@ a:hover {
 
 .project-card h3 {
   min-width: 0;
+  flex: 1;
   color: var(--text-bright);
   font-size: var(--text-16);
   overflow: hidden;
@@ -803,6 +804,44 @@ a:hover {
   color: var(--accent);
   font-size: var(--text-12);
   font-weight: 600;
+}
+
+.role-badge,
+.access-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  font-size: var(--text-11);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.role-badge.owner,
+.access-badge.owner {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-color));
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.role-badge.editor,
+.access-badge.editor {
+  border-color: color-mix(in srgb, var(--info) 36%, var(--border-color));
+  color: var(--info);
+  background: var(--info-soft);
+}
+
+.role-badge.viewer,
+.access-badge.viewer {
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  background: var(--bg-editor);
 }
 
 .project-card .actions {
@@ -897,6 +936,73 @@ a:hover {
   margin-bottom: var(--space-8);
   color: var(--text-primary);
   font-size: var(--text-13);
+}
+
+.settings-access-row {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.share-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  gap: var(--space-8);
+  align-items: center;
+}
+
+.share-list {
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-10);
+}
+
+.share-row {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-tertiary);
+}
+
+.share-row.owner {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.share-row span {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.share-row strong,
+.share-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-row strong {
+  color: var(--text-primary);
+  font-size: var(--text-12);
+}
+
+.share-row small {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+}
+
+.panel-empty.compact {
+  min-height: 56px;
+  padding: var(--space-10);
 }
 
 .copy-row {
@@ -1729,6 +1835,15 @@ a:hover {
 .editor-toolbar-left .project-name:focus {
   background: var(--bg-hover);
   outline: none;
+}
+
+.editor-layout.read-only .editor-toolbar-left .project-name:hover,
+.editor-layout.read-only .editor-toolbar-left .project-name:focus {
+  background: transparent;
+}
+
+.editor-toolbar-left .access-badge {
+  flex: 0 0 auto;
 }
 
 .compile-status {
@@ -3177,5 +3292,15 @@ td {
 
   .health-row small {
     text-align: left;
+  }
+
+  .share-add-row,
+  .share-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .share-row.owner {
+    grid-template-columns: 1fr;
   }
 }

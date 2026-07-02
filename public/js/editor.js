@@ -7,6 +7,7 @@ let compileMarkers = [];
 let currentImageFiles = [];
 let currentCitationEntries = [];
 let suppressNextChange = false;
+let readOnlyMode = false;
 
 const Editor = {
   get currentProjectId() {
@@ -18,6 +19,7 @@ const Editor = {
   },
 
   init(container, options = {}) {
+    readOnlyMode = Boolean(options.readOnly);
     require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' } });
     require(['vs/editor/editor.main'], () => {
       monacoInstance = monaco;
@@ -44,6 +46,8 @@ const Editor = {
         foldingStrategy: 'auto',
         renderWhitespace: 'none',
         bracketPairColorization: { enabled: true },
+        readOnly: readOnlyMode,
+        domReadOnly: readOnlyMode,
       });
 
       // Autosave
@@ -52,6 +56,7 @@ const Editor = {
           suppressNextChange = false;
           return;
         }
+        if (readOnlyMode) return;
         if (options.onDirty) options.onDirty();
         clearTimeout(autosaveTimer);
         autosaveTimer = setTimeout(() => this.autosave(), 2000);
@@ -252,7 +257,7 @@ const Editor = {
   },
 
   insertText(text) {
-    if (!editor) return;
+    if (!editor || readOnlyMode) return;
     const model = editor.getModel();
     if (!model) return;
     const selection = editor.getSelection();
@@ -292,7 +297,7 @@ const Editor = {
   },
 
   async autosave() {
-    if (!currentProjectId || !currentFilePath || !editor) return;
+    if (readOnlyMode || !currentProjectId || !currentFilePath || !editor) return;
     try {
       await api.put(`/projects/${currentProjectId}/files/${currentFilePath}`, {
         content: this.getValue(),
@@ -305,6 +310,13 @@ const Editor = {
   setContext(projectId, filePath) {
     currentProjectId = projectId;
     currentFilePath = filePath;
+  },
+
+  setReadOnly(enabled) {
+    readOnlyMode = Boolean(enabled);
+    if (editor) {
+      editor.updateOptions({ readOnly: readOnlyMode, domReadOnly: readOnlyMode });
+    }
   },
 
   revealLine(line) {

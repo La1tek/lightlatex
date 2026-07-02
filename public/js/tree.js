@@ -9,6 +9,7 @@ class FileTree {
     this.files = [];
     this.hashes = new Map();
     this.devMode = options.devMode || false;
+    this.readOnly = options.readOnly || false;
     this.selectedPath = null;
   }
 
@@ -24,6 +25,11 @@ class FileTree {
 
   setDevMode(enabled) {
     this.devMode = Boolean(enabled);
+    this.render();
+  }
+
+  setReadOnly(enabled) {
+    this.readOnly = Boolean(enabled);
     this.render();
   }
 
@@ -118,36 +124,38 @@ class FileTree {
         const hashTitle = hash ? ` title="${safePath} · sha256 ${this.escapeHtml(hash)}"` : ` title="${safePath}"`;
         el.innerHTML = `${indent}<span class="icon">${icon}</span><span class="name"${hashTitle}>${safeName}</span>
           ${this.devMode && hash ? `<span class="file-hash" title="sha256 ${this.escapeHtml(hash)}">${this.escapeHtml(hash.slice(0, 7))}</span>` : ''}
-          <span class="file-actions">
+          ${this.readOnly ? '' : `<span class="file-actions">
             <button title="Rename" aria-label="Rename ${safePath}" data-rename="${safePath}">${Icons.settings}</button>
             <button title="Delete" aria-label="Delete ${safePath}" data-delete="${safePath}">${Icons.trash14}</button>
-          </span>`;
+          </span>`}`;
 
         // Drag & drop support
-        el.draggable = true;
-        el.dataset.path = child.file.path;
-        el.addEventListener('dragstart', (e) => {
-          e.dataTransfer.setData('text/plain', child.file.path);
-          e.dataTransfer.effectAllowed = 'move';
-          el.style.opacity = '0.5';
-        });
-        el.addEventListener('dragend', () => { el.style.opacity = '1'; });
-        el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.style.background = 'var(--accent)'; });
-        el.addEventListener('dragleave', () => { el.style.background = ''; });
-        el.addEventListener('drop', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          el.style.background = '';
-          const oldPath = e.dataTransfer.getData('text/plain');
-          const targetPath = child.file.path;
-          if (oldPath === targetPath) return;
-          // Drop into folder: construct new path
-          const lastSlash = targetPath.lastIndexOf('/');
-          const dir = lastSlash >= 0 ? targetPath.substring(0, lastSlash + 1) : '';
-          const fileName = oldPath.split('/').pop();
-          const newPath = dir + fileName;
-          if (this.onRename) this.onRename(oldPath, newPath);
-        });
+        if (!this.readOnly) {
+          el.draggable = true;
+          el.dataset.path = child.file.path;
+          el.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', child.file.path);
+            e.dataTransfer.effectAllowed = 'move';
+            el.style.opacity = '0.5';
+          });
+          el.addEventListener('dragend', () => { el.style.opacity = '1'; });
+          el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.style.background = 'var(--accent)'; });
+          el.addEventListener('dragleave', () => { el.style.background = ''; });
+          el.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            el.style.background = '';
+            const oldPath = e.dataTransfer.getData('text/plain');
+            const targetPath = child.file.path;
+            if (oldPath === targetPath) return;
+            // Drop into folder: construct new path
+            const lastSlash = targetPath.lastIndexOf('/');
+            const dir = lastSlash >= 0 ? targetPath.substring(0, lastSlash + 1) : '';
+            const fileName = oldPath.split('/').pop();
+            const newPath = dir + fileName;
+            if (this.onRename) this.onRename(oldPath, newPath);
+          });
+        }
 
         // Thumbnail for images
         if (isImage && this.projectId) {
@@ -176,19 +184,21 @@ class FileTree {
         el.classList.add('folder');
         el.innerHTML = `${indent}<span class="icon">${Icons.folderOpen}</span><span class="name">${this.escapeHtml(name)}/</span>`;
         // Drop on folders
-        el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.style.background = 'var(--accent)'; });
-        el.addEventListener('dragleave', () => { el.style.background = ''; });
-        el.addEventListener('drop', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          el.style.background = '';
-          const oldPath = e.dataTransfer.getData('text/plain');
-          const fileName = oldPath.split('/').pop();
-          // Build folder path from tree
-          const folderPath = this.buildPath(child, this.files);
-          const newPath = folderPath ? folderPath + '/' + fileName : fileName;
-          if (this.onRename) this.onRename(oldPath, newPath);
-        });
+        if (!this.readOnly) {
+          el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.style.background = 'var(--accent)'; });
+          el.addEventListener('dragleave', () => { el.style.background = ''; });
+          el.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            el.style.background = '';
+            const oldPath = e.dataTransfer.getData('text/plain');
+            const fileName = oldPath.split('/').pop();
+            // Build folder path from tree
+            const folderPath = this.buildPath(child, this.files);
+            const newPath = folderPath ? folderPath + '/' + fileName : fileName;
+            if (this.onRename) this.onRename(oldPath, newPath);
+          });
+        }
       }
 
       parent.appendChild(el);

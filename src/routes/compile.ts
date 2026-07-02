@@ -1,25 +1,25 @@
 import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
-import { db } from "../db";
-import { projects } from "../db/schema";
-import { eq, and } from "drizzle-orm";
 import { compileProject } from "../compiler/engine";
 import { p } from "../utils";
 import fs from "fs";
 import fsPromises from "fs/promises";
 import { createSnapshot } from "../storage/fs";
+import { ProjectAccessError, requireProjectAccess } from "../auth/projectAccess";
 
 const router = Router();
 router.use(authMiddleware);
 
 const PROJECTS_DIR = process.env.PROJECTS_DIR || "./data/projects";
 
+function projectStatus(err: any) {
+  return err instanceof ProjectAccessError ? err.status : 500;
+}
+
 router.post("/:id/compile", async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    const [project] = await db.select().from(projects)
-      .where(and(eq(projects.id, id), eq(projects.userId, req.userId!))).limit(1);
-    if (!project) return res.status(404).json({ error: "Project not found" });
+    const { project } = await requireProjectAccess(id, req.userId!, "editor");
 
     const result = await compileProject(project.id, project.mainFile || "main.tex", project.compiler || "pdflatex");
 
@@ -30,16 +30,14 @@ router.post("/:id/compile", async (req: AuthRequest, res: Response) => {
 
     res.json(result);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(projectStatus(err)).json({ error: err.message });
   }
 });
 
 router.get("/:id/output.pdf", async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    const [project] = await db.select().from(projects)
-      .where(and(eq(projects.id, id), eq(projects.userId, req.userId!))).limit(1);
-    if (!project) return res.status(404).json({ error: "Project not found" });
+    const { project } = await requireProjectAccess(id, req.userId!, "viewer");
 
     const pdfPath = PROJECTS_DIR + "/" + project.id + "/output.pdf";
     const exists = await fsPromises.access(pdfPath).then(() => true).catch(() => false);
@@ -49,7 +47,7 @@ router.get("/:id/output.pdf", async (req: AuthRequest, res: Response) => {
     const stream = fs.createReadStream(pdfPath);
     stream.pipe(res);
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(err instanceof ProjectAccessError ? err.status : 404).json({ error: err.message });
   }
 });
 
