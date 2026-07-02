@@ -3,12 +3,30 @@ import { authMiddleware, AuthRequest } from "../auth/middleware";
 import { db } from "../db";
 import { projects, files } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { ensureProjectDir, removeProjectDir, writeFile, readFile, getProjectDir } from "../storage/fs";
+import { ensureProjectDir, removeProjectDir, writeFile, readFile } from "../storage/fs";
+import { syncFileRecords } from "../storage/fileRegistry";
 import { applyTemplate } from "./templates";
 import { p } from "../utils";
 
 const router = Router();
+const ALLOWED_COMPILERS = new Set(["pdflatex", "xelatex", "lualatex"]);
 router.use(authMiddleware);
+
+function getCompiler(value: unknown): string {
+  const compiler = typeof value === "string" && value.trim() ? value.trim() : "pdflatex";
+  if (!ALLOWED_COMPILERS.has(compiler)) {
+    throw new Error("Unsupported compiler");
+  }
+  return compiler;
+}
+
+function isSafeMainFile(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && value.endsWith(".tex")
+    && !value.startsWith("/")
+    && !value.split(/[\\/]+/).includes("..");
+}
 
 router.get("/", async (req: AuthRequest, res: Response) => {
   const list = await db.select().from(projects).where(eq(projects.userId, req.userId!));
@@ -18,12 +36,21 @@ router.get("/", async (req: AuthRequest, res: Response) => {
 router.post("/", async (req: AuthRequest, res: Response) => {
   const { name, description, compiler, mainFile, template } = req.body;
   if (!name) return res.status(400).json({ error: "Project name required" });
+  let selectedCompiler: string;
+  try {
+    selectedCompiler = getCompiler(compiler);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
+  if (mainFile !== undefined && !isSafeMainFile(mainFile)) {
+    return res.status(400).json({ error: "Invalid main file path" });
+  }
 
   const [project] = await db.insert(projects).values({
     userId: req.userId!,
     name,
     description,
-    compiler: compiler || "pdflatex",
+    compiler: selectedCompiler,
     mainFile: mainFile || "main.tex",
   }).returning();
 
@@ -38,6 +65,7 @@ router.post("/", async (req: AuthRequest, res: Response) => {
   } else {
     await writeFile(project.id, "main.tex", `\\documentclass{article}\n\\begin{document}\n${name}\n\\end{document}\n`);
   }
+  await syncFileRecords(project.id);
 
   res.status(201).json(project);
 });
@@ -57,13 +85,22 @@ router.put("/:id", async (req: AuthRequest, res: Response) => {
   if (!existing) return res.status(404).json({ error: "Project not found" });
 
   const { name, description, compiler, mainFile } = req.body;
-  const [updated] = await db.update(projects).set({
-    ...(name !== undefined && { name }),
-    ...(description !== undefined && { description }),
-    ...(compiler !== undefined && { compiler }),
-    ...(mainFile !== undefined && { mainFile }),
-    updatedAt: new Date(),
-  }).where(eq(projects.id, id)).returning();
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (name !== undefined) updates.name = name;
+  if (description !== undefined) updates.description = description;
+  if (compiler !== undefined) {
+    try {
+      updates.compiler = getCompiler(compiler);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  }
+  if (mainFile !== undefined) {
+    if (!isSafeMainFile(mainFile)) return res.status(400).json({ error: "Invalid main file path" });
+    updates.mainFile = mainFile;
+  }
+
+  const [updated] = await db.update(projects).set(updates).where(eq(projects.id, id)).returning();
 
   res.json(updated);
 });

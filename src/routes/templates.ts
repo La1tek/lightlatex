@@ -19,14 +19,22 @@ interface Template {
   files: TemplateFile[];
 }
 
-const TEMPLATES_DIR = path.join(__dirname, "..", "templates");
+function getTemplatesDir(): string {
+  const candidates = [
+    path.join(__dirname, "..", "templates"),
+    path.join(process.cwd(), "src", "templates"),
+  ];
+  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  return found || candidates[0];
+}
 
 function getAvailableTemplates(): Template[] {
   const templates: Template[] = [];
   const dirs = ["article", "book", "beamer"];
+  const templatesDir = getTemplatesDir();
 
   for (const dir of dirs) {
-    const templateDir = path.join(TEMPLATES_DIR, dir);
+    const templateDir = path.join(templatesDir, dir);
     if (!fs.existsSync(templateDir)) continue;
 
     const metaPath = path.join(templateDir, "meta.json");

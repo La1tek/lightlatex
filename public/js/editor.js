@@ -7,18 +7,29 @@ let compileMarkers = [];
 let currentImageFiles = [];
 
 const Editor = {
+  get currentProjectId() {
+    return currentProjectId;
+  },
+
+  get currentFilePath() {
+    return currentFilePath;
+  },
+
   init(container, options = {}) {
     require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' } });
     require(['vs/editor/editor.main'], () => {
       monacoInstance = monaco;
       this.registerLatexLanguage();
+      this.registerThemes();
 
       editor = monaco.editor.create(container, {
         value: options.value || '',
         language: 'latex',
-        theme: document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'vs',
+        theme: document.documentElement.dataset.theme === 'dark' ? 'lighttex-dark' : 'lighttex-light',
         minimap: { enabled: true },
         fontSize: 14,
+        fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        lineHeight: 21,
         lineNumbers: 'on',
         scrollBeyondLastLine: false,
         wordWrap: 'on',
@@ -81,7 +92,71 @@ const Editor = {
     });
   },
 
+  registerThemes() {
+    monaco.editor.defineTheme('lighttex-light', {
+      base: 'vs',
+      inherit: true,
+      rules: [
+        { token: 'keyword', foreground: '0f7667', fontStyle: 'bold' },
+        { token: 'delimiter.curly', foreground: '334155' },
+        { token: 'string', foreground: 'b45309' },
+        { token: 'comment', foreground: '64748b', fontStyle: 'italic' },
+        { token: 'number', foreground: '2563eb' },
+      ],
+      colors: {
+        'editor.background': '#ffffff',
+        'editor.foreground': '#1e293b',
+        'editorLineNumber.foreground': '#94a3b8',
+        'editorLineNumber.activeForeground': '#0f7667',
+        'editorCursor.foreground': '#0f7667',
+        'editor.lineHighlightBackground': '#f8fafc',
+        'editor.selectionBackground': '#99f6e44d',
+        'editorGutter.background': '#ffffff',
+      },
+    });
+
+    monaco.editor.defineTheme('lighttex-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'keyword', foreground: '5eead4', fontStyle: 'bold' },
+        { token: 'delimiter.curly', foreground: 'cbd5e1' },
+        { token: 'string', foreground: 'fbbf24' },
+        { token: 'comment', foreground: '94a3b8', fontStyle: 'italic' },
+        { token: 'number', foreground: '93c5fd' },
+      ],
+      colors: {
+        'editor.background': '#0f172a',
+        'editor.foreground': '#d7dee9',
+        'editorLineNumber.foreground': '#64748b',
+        'editorLineNumber.activeForeground': '#5eead4',
+        'editorCursor.foreground': '#5eead4',
+        'editor.lineHighlightBackground': '#172033',
+        'editor.selectionBackground': '#14b88f40',
+        'editorGutter.background': '#0f172a',
+      },
+    });
+  },
+
   registerLatexLanguage() {
+    if (!monaco.languages.getLanguages().some((language) => language.id === 'latex')) {
+      monaco.languages.register({ id: 'latex' });
+    }
+    monaco.languages.setMonarchTokensProvider('latex', {
+      tokenizer: {
+        root: [
+          [/%.*$/, 'comment'],
+          [/\\[a-zA-Z@]+/, 'keyword'],
+          [/\\./, 'keyword'],
+          [/\$[^$]*\$/, 'number'],
+          [/\\\[[\s\S]*?\\\]/, 'number'],
+          [/[{}()[\]]/, '@brackets'],
+          [/"[^"]*"/, 'string'],
+          [/'[^']*'/, 'string'],
+        ],
+      },
+    });
+
     monaco.languages.registerCompletionItemProvider('latex', {
       triggerCharacters: ['\\', '{'],
       provideCompletionItems: (model, position) => {
@@ -174,9 +249,7 @@ const Editor = {
 
   setTheme(theme) {
     if (editor) {
-      editor.updateOptions({
-        theme: theme === 'dark' ? 'vs-dark' : 'vs',
-      });
+      monacoInstance.editor.setTheme(theme === 'dark' ? 'lighttex-dark' : 'lighttex-light');
     }
   },
 

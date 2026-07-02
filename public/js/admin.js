@@ -14,31 +14,46 @@ const Admin = {
 
     app.innerHTML = `
       <div class="admin-layout">
-        <div class="admin-header">
-          <h1>${Icons.settings} Admin Panel</h1>
-          <div style="display:flex;gap:8px;align-items:center">
-            <a href="#/" class="btn btn-secondary btn-small">${Icons.backArrow16} Dashboard</a>
-            <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme">${theme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
-          </div>
-        </div>
-        <div class="admin-content">
-          <div class="admin-section">
-            <h2>System Stats</h2>
-            <div id="admin-stats" class="stats-grid"><div class="empty-state"><p>Loading...</p></div></div>
-          </div>
-          <div class="admin-section">
-            <h2>Users</h2>
-            <div id="admin-users"><div class="empty-state"><p>Loading...</p></div></div>
-          </div>
-          <div class="admin-section">
-            <h2>Backup & Restore</h2>
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
-              <button class="btn btn-primary" id="backup-btn">${Icons.download16} Create Backup</button>
-              <button class="btn btn-secondary" id="restore-btn">${Icons.upload16} Restore Backup</button>
+        <aside class="admin-sidebar">
+          <h1 class="brand">${Icons.logo} LightTeX</h1>
+          <nav>
+            <a class="active" href="#overview">Overview</a>
+            <a href="#users">Users</a>
+            <a href="#backups">Backups</a>
+            <a href="#settings">Settings</a>
+          </nav>
+        </aside>
+        <main class="admin-main">
+          <div class="admin-header">
+            <h1>${Icons.settings} Admin panel</h1>
+            <div style="display:flex;gap:8px;align-items:center">
+              <a href="#/" class="btn btn-secondary btn-small">${Icons.backArrow16} Dashboard</a>
+              <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme" aria-label="Toggle theme">${theme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
             </div>
-            <input type="file" id="restore-file" accept=".tar.gz" style="display:none">
           </div>
-        </div>
+          <div class="admin-content">
+            <section class="admin-section" id="overview">
+              <h2>Overview</h2>
+              <div id="admin-stats" class="stats-grid"><div class="empty-state"><p>Loading...</p></div></div>
+            </section>
+            <section class="admin-section" id="users">
+              <h2>Users</h2>
+              <div id="admin-users"><div class="empty-state"><p>Loading...</p></div></div>
+            </section>
+            <section class="admin-section" id="backups">
+              <h2>Backups</h2>
+              <div style="display:flex;gap:12px;flex-wrap:wrap">
+                <button class="btn btn-primary" id="backup-btn">${Icons.download16} Create backup now</button>
+                <button class="btn btn-secondary" id="restore-btn">${Icons.upload16} Restore backup</button>
+              </div>
+              <input type="file" id="restore-file" accept=".tar.gz" style="display:none">
+            </section>
+            <section class="admin-section" id="settings">
+              <h2>Settings</h2>
+              <p style="color:var(--text-secondary);font-size:13px">Server settings are configured through environment variables.</p>
+            </section>
+          </div>
+        </main>
       </div>
     `;
 
@@ -85,6 +100,10 @@ const Admin = {
     const el = document.getElementById('admin-stats');
     try {
       const stats = await api.get('/admin/stats');
+      if (stats.error) {
+        el.innerHTML = `<div class="empty-state"><p>${stats.error}</p></div>`;
+        return;
+      }
       const mem = stats.systemStats?.memory || 'N/A';
       const cpu = stats.systemStats?.loadAvg || 'N/A';
       el.innerHTML = `
@@ -118,6 +137,10 @@ const Admin = {
     const el = document.getElementById('admin-users');
     try {
       const users = await api.get('/admin/users');
+      if (!Array.isArray(users)) {
+        el.innerHTML = `<div class="empty-state"><p>${users.error || 'Could not load users'}</p></div>`;
+        return;
+      }
       if (users.length === 0) {
         el.innerHTML = '<div class="empty-state"><p>No users</p></div>';
         return;
@@ -175,8 +198,3 @@ const Admin = {
     }
   }
 };
-
-// Check if we're on /admin route
-if (window.location.pathname === '/admin') {
-  document.addEventListener('DOMContentLoaded', () => Admin.init());
-}

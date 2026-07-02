@@ -4,9 +4,43 @@ import archiver from "archiver";
 import extractZip from "extract-zip";
 
 const PROJECTS_DIR = process.env.PROJECTS_DIR || "./data/projects";
+const SNAPSHOTS_DIR = ".snapshots";
+const GENERATED_OUTPUTS = new Set([
+  "output.pdf",
+  "output.log",
+  "output.aux",
+  "output.out",
+  "output.toc",
+  "output.fls",
+  "output.fdb_latexmk",
+]);
 
 export function getProjectDir(projectId: string): string {
-  return path.join(PROJECTS_DIR, projectId);
+  return path.resolve(PROJECTS_DIR, projectId);
+}
+
+function resolveInside(baseDir: string, ...segments: string[]): string {
+  const base = path.resolve(baseDir);
+  const fullPath = path.resolve(base, ...segments);
+  if (fullPath !== base && !fullPath.startsWith(base + path.sep)) {
+    throw new Error("Invalid file path");
+  }
+  return fullPath;
+}
+
+export function resolveProjectPath(projectId: string, filePath: string): string {
+  if (!filePath || path.isAbsolute(filePath)) {
+    throw new Error("Invalid file path");
+  }
+  return resolveInside(getProjectDir(projectId), filePath);
+}
+
+function isGeneratedOrInternal(relPath: string): boolean {
+  const normalized = relPath.split(path.sep).join("/");
+  if (normalized === SNAPSHOTS_DIR || normalized.startsWith(`${SNAPSHOTS_DIR}/`)) return true;
+  if (GENERATED_OUTPUTS.has(normalized)) return true;
+  if (normalized.endsWith(".synctex.gz")) return true;
+  return false;
 }
 
 export async function ensureProjectDir(projectId: string): Promise<void> {
@@ -18,10 +52,7 @@ export async function ensureDir(dir: string): Promise<void> {
 }
 
 export async function readFile(projectId: string, filePath: string): Promise<string> {
-  const fullPath = path.join(getProjectDir(projectId), filePath);
-  if (!fullPath.startsWith(getProjectDir(projectId))) {
-    throw new Error("Invalid file path");
-  }
+  const fullPath = resolveProjectPath(projectId, filePath);
   try {
     return await fs.promises.readFile(fullPath, "utf-8");
   } catch {
@@ -30,19 +61,13 @@ export async function readFile(projectId: string, filePath: string): Promise<str
 }
 
 export async function writeFile(projectId: string, filePath: string, content: string): Promise<void> {
-  const fullPath = path.join(getProjectDir(projectId), filePath);
-  if (!fullPath.startsWith(getProjectDir(projectId))) {
-    throw new Error("Invalid file path");
-  }
+  const fullPath = resolveProjectPath(projectId, filePath);
   await ensureDir(path.dirname(fullPath));
   await fs.promises.writeFile(fullPath, content, "utf-8");
 }
 
 export async function deleteFile(projectId: string, filePath: string): Promise<void> {
-  const fullPath = path.join(getProjectDir(projectId), filePath);
-  if (!fullPath.startsWith(getProjectDir(projectId))) {
-    throw new Error("Invalid file path");
-  }
+  const fullPath = resolveProjectPath(projectId, filePath);
   try {
     await fs.promises.unlink(fullPath);
     // Try to clean up empty directories
@@ -74,8 +99,10 @@ export async function listFiles(projectId: string): Promise<string[]> {
     for (const entry of entries) {
       const rel = base ? `${base}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
+        if (entry.name === SNAPSHOTS_DIR) continue;
         await walk(path.join(d, entry.name), rel);
       } else {
+        if (isGeneratedOrInternal(rel)) continue;
         result.push(rel);
       }
     }
@@ -103,27 +130,29 @@ export async function zipProject(projectId: string): Promise<Buffer> {
     archive.on("error", reject);
 
     const dir = getProjectDir(projectId);
-    archive.directory(dir, false);
-    archive.finalize();
+    listFiles(projectId)
+      .then((paths) => {
+        for (const relPath of paths) {
+          archive.file(path.join(dir, relPath), { name: relPath });
+        }
+        archive.finalize();
+      })
+      .catch(reject);
   });
 }
 
 // ===== Snapshots =====
 export async function createSnapshot(projectId: string): Promise<string> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const snapshotsDir = path.join(getProjectDir(projectId), '.snapshots', timestamp);
+  const snapshotsDir = path.join(getProjectDir(projectId), SNAPSHOTS_DIR, timestamp);
   const projectDir = getProjectDir(projectId);
   await ensureDir(snapshotsDir);
-  const entries = await fs.promises.readdir(projectDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name === '.snapshots' || entry.name === 'output.pdf' || entry.name === 'output.log') continue;
-    const src = path.join(projectDir, entry.name);
-    const dest = path.join(snapshotsDir, entry.name);
-    if (entry.isDirectory()) {
-      await copyDirRecursive(src, dest);
-    } else {
-      await fs.promises.copyFile(src, dest);
-    }
+  const files = await listFiles(projectId);
+  for (const relPath of files) {
+    const src = path.join(projectDir, relPath);
+    const dest = path.join(snapshotsDir, relPath);
+    await ensureDir(path.dirname(dest));
+    await fs.promises.copyFile(src, dest);
   }
   return timestamp;
 }
@@ -143,7 +172,7 @@ async function copyDirRecursive(src: string, dest: string) {
 }
 
 export async function listSnapshots(projectId: string): Promise<string[]> {
-  const snapshotsDir = path.join(getProjectDir(projectId), '.snapshots');
+  const snapshotsDir = path.join(getProjectDir(projectId), SNAPSHOTS_DIR);
   try {
     const entries = await fs.promises.readdir(snapshotsDir);
     return entries.sort().reverse();
@@ -153,15 +182,20 @@ export async function listSnapshots(projectId: string): Promise<string[]> {
 }
 
 export async function getSnapshotFile(projectId: string, timestamp: string, filePath: string): Promise<string> {
-  const fullPath = path.join(getProjectDir(projectId), '.snapshots', timestamp, filePath);
+  if (!timestamp || timestamp.includes("/") || timestamp.includes("\\")) {
+    throw new Error("Invalid snapshot timestamp");
+  }
+  const snapshotDir = path.join(getProjectDir(projectId), SNAPSHOTS_DIR, timestamp);
+  const fullPath = resolveInside(snapshotDir, filePath);
   return fs.promises.readFile(fullPath, 'utf-8');
 }
 
 export async function renameFile(projectId: string, oldPath: string, newPath: string): Promise<void> {
-  const oldFullPath = path.join(getProjectDir(projectId), oldPath);
-  const newFullPath = path.join(getProjectDir(projectId), newPath);
-  if (!oldFullPath.startsWith(getProjectDir(projectId)) || !newFullPath.startsWith(getProjectDir(projectId))) {
-    throw new Error("Invalid file path");
+  const oldFullPath = resolveProjectPath(projectId, oldPath);
+  const newFullPath = resolveProjectPath(projectId, newPath);
+  const targetExists = await fs.promises.access(newFullPath).then(() => true).catch(() => false);
+  if (targetExists) {
+    throw new Error("Target file already exists");
   }
   await ensureDir(path.dirname(newFullPath));
   await fs.promises.rename(oldFullPath, newFullPath);

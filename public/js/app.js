@@ -5,9 +5,10 @@ const App = {
   isCompiling: false,
   previewVisible: true,
   imageFiles: [],
+  lastCompileErrors: [],
 
   async init() {
-    const theme = localStorage.getItem('theme') || 'dark';
+    const theme = localStorage.getItem('theme') || 'light';
     document.documentElement.dataset.theme = theme;
 
     window.addEventListener('hashchange', () => this.route());
@@ -18,7 +19,13 @@ const App = {
     const hash = window.location.hash.slice(1) || '/';
     const app = document.getElementById('app');
 
-    if (hash.startsWith('/project/')) {
+    if (window.location.pathname === '/admin' || hash.startsWith('/admin')) {
+      if (!api.isAuthenticated) {
+        Auth.render(app);
+      } else {
+        Admin.init();
+      }
+    } else if (hash.startsWith('/project/')) {
       const projectId = hash.split('/')[2];
       this.showEditor(app, projectId);
     } else if (!api.isAuthenticated) {
@@ -37,17 +44,38 @@ const App = {
         <div class="dashboard-header">
           <h1 class="brand">${Icons.logo} LightTeX</h1>
           <div class="dashboard-header-actions">
-            <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
-            <button class="btn btn-secondary" id="new-project-btn">${Icons.plus16} New Project</button>
-            <button class="btn-icon" id="logout-btn" title="Logout">${Icons.logout16}</button>
+            <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme" aria-label="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
+            <button class="btn btn-secondary" id="new-project-btn">${Icons.plus16} New project</button>
+            <button class="btn-icon" id="logout-btn" title="Logout" aria-label="Logout">${Icons.logout16}</button>
           </div>
         </div>
-        <div class="dashboard-content" id="projects-list">
-          <div class="empty-state">
-            <div class="icon">${Icons.clock}</div>
-            <p>Loading projects...</p>
+        <main class="dashboard-content">
+          <section class="dashboard-hero">
+            <div class="dashboard-title-row">
+              <div>
+                <h2>Projects</h2>
+                <p>Recent LaTeX workspaces, templates, compilers, and zip imports.</p>
+              </div>
+              <div class="import-hint">${Icons.upload16} Drop a .zip anywhere to import a project</div>
+            </div>
+            <div class="dashboard-tools">
+              <label class="dashboard-search" aria-label="Search projects">
+                ${Icons.search16}
+                <input id="project-search" type="search" placeholder="Search projects, descriptions, compilers...">
+              </label>
+              <div class="segmented-control" aria-label="Project view">
+                <button class="active" id="grid-view-btn" type="button">Grid</button>
+                <button id="list-view-btn" type="button">List</button>
+              </div>
+            </div>
+          </section>
+          <div id="projects-list">
+            <div class="empty-state">
+              <div class="icon">${Icons.clock}</div>
+              <p>Loading projects...</p>
+            </div>
           </div>
-        </div>
+        </main>
       </div>
     `;
 
@@ -85,54 +113,95 @@ const App = {
     try {
       const projects = await api.get('/projects');
       const list = document.getElementById('projects-list');
+      const searchInput = document.getElementById('project-search');
+      const gridBtn = document.getElementById('grid-view-btn');
+      const listBtn = document.getElementById('list-view-btn');
+      let viewMode = 'grid';
 
       if (projects.length === 0) {
         list.innerHTML = `
           <div class="empty-state">
             <div class="icon">${Icons.folderEmpty}</div>
-            <p>No projects yet. Create your first one!</p>
+            <p>No projects yet. Create a project or drop a .zip archive to import one.</p>
           </div>
         `;
         return;
       }
 
-      list.innerHTML = `<div class="project-grid" id="project-grid"></div>`;
-      const grid = document.getElementById('project-grid');
+      const renderProjects = () => {
+        const query = (searchInput.value || '').trim().toLowerCase();
+        const filtered = projects.filter((p) => {
+          const haystack = `${p.name || ''} ${p.description || ''} ${p.compiler || ''}`.toLowerCase();
+          return haystack.includes(query);
+        });
 
-      for (const p of projects) {
-        const card = document.createElement('div');
-        card.className = 'project-card';
-        card.innerHTML = `
-          <div class="project-card-header">
-            <span class="project-card-icon">${Icons.fileTex}</span>
-            <h3>${this.escapeHtml(p.name)}</h3>
-          </div>
-          <div class="desc">${this.escapeHtml(p.description || 'No description')}</div>
-          <div class="meta">
-            <span>${Icons.wrench} ${p.compiler}</span>
-            <span>${new Date(p.updatedAt).toLocaleDateString()}</span>
-          </div>
-          <div class="actions">
-            <button class="btn btn-secondary btn-small" data-open="${p.id}">Open</button>
-            <button class="btn btn-danger btn-small" data-delete="${p.id}">${Icons.trash}</button>
-          </div>
-        `;
-        card.querySelector('[data-open]').addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.location.hash = `#/project/${p.id}`;
-        });
-        card.querySelector('[data-delete]').addEventListener('click', async (e) => {
-          e.stopPropagation();
-          if (confirm('Delete this project and all its files?')) {
-            await api.del(`/projects/${p.id}`);
-            this.showDashboard(container);
-          }
-        });
-        card.addEventListener('click', () => {
-          window.location.hash = `#/project/${p.id}`;
-        });
-        grid.appendChild(card);
-      }
+        if (filtered.length === 0) {
+          list.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">${Icons.search}</div>
+              <p>No projects match this search.</p>
+            </div>
+          `;
+          return;
+        }
+
+        list.innerHTML = `<div class="project-grid ${viewMode === 'list' ? 'list-mode' : ''}" id="project-grid"></div>`;
+        const grid = document.getElementById('project-grid');
+
+        for (const p of filtered) {
+          const card = document.createElement('article');
+          card.className = 'project-card';
+          card.tabIndex = 0;
+          card.innerHTML = `
+            <div class="project-card-header">
+              <span class="project-card-icon">${Icons.fileTex}</span>
+              <h3>${this.escapeHtml(p.name)}</h3>
+            </div>
+            <div class="desc">${this.escapeHtml(p.description || 'No description')}</div>
+            <div class="meta">
+              <span>${Icons.wrench} ${this.escapeHtml(p.compiler || 'pdflatex')}</span>
+              <span>${new Date(p.updatedAt).toLocaleDateString()}</span>
+            </div>
+            <div class="actions">
+              <button class="btn btn-secondary btn-small" data-open="${p.id}">Open</button>
+              <button class="btn btn-danger btn-small" data-delete="${p.id}" title="Delete project" aria-label="Delete ${this.escapeHtml(p.name)}">${Icons.trash}</button>
+            </div>
+          `;
+          card.querySelector('[data-open]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.location.hash = `#/project/${p.id}`;
+          });
+          card.querySelector('[data-delete]').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm('Delete this project and all its files?')) {
+              await api.del(`/projects/${p.id}`);
+              this.showDashboard(container);
+            }
+          });
+          card.addEventListener('click', () => {
+            window.location.hash = `#/project/${p.id}`;
+          });
+          card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') window.location.hash = `#/project/${p.id}`;
+          });
+          grid.appendChild(card);
+        }
+      };
+
+      searchInput.addEventListener('input', renderProjects);
+      gridBtn.addEventListener('click', () => {
+        viewMode = 'grid';
+        gridBtn.classList.add('active');
+        listBtn.classList.remove('active');
+        renderProjects();
+      });
+      listBtn.addEventListener('click', () => {
+        viewMode = 'list';
+        listBtn.classList.add('active');
+        gridBtn.classList.remove('active');
+        renderProjects();
+      });
+      renderProjects();
     } catch (err) {
       document.getElementById('projects-list').innerHTML = `
         <div class="empty-state">
@@ -150,15 +219,15 @@ const App = {
       <div class="modal">
         <h2>New Project</h2>
         <div class="form-group">
-          <label>Project Name</label>
+          <label for="new-project-name">Project name</label>
           <input type="text" id="new-project-name" placeholder="My Paper" autofocus>
         </div>
         <div class="form-group">
-          <label>Description (optional)</label>
-          <input type="text" id="new-project-desc" placeholder="A brief description">
+          <label for="new-project-desc">Description</label>
+          <input type="text" id="new-project-desc" placeholder="Research topic, class, journal, or team">
         </div>
         <div class="form-group">
-          <label>Compiler</label>
+          <label for="new-project-compiler">Compiler</label>
           <select id="new-project-compiler">
             <option value="pdflatex">pdflatex</option>
             <option value="xelatex">xelatex</option>
@@ -236,24 +305,24 @@ const App = {
       <div class="editor-layout">
         <div class="editor-toolbar">
           <div class="editor-toolbar-left">
-            <a href="#/" class="btn-icon" title="Back to dashboard">${Icons.backArrow16}</a>
+            <a href="#/" class="btn-icon" title="Back to dashboard" aria-label="Back to dashboard">${Icons.backArrow16}</a>
             <span class="project-name" id="editor-project-name">Loading...</span>
           </div>
           <div class="editor-toolbar-center">
-            <span class="compile-status" id="compile-status"></span>
+            <button class="compile-status" id="compile-status" type="button" title="Compile status">${Icons.play16} Idle</button>
           </div>
           <div class="editor-toolbar-right">
             <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
             <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
             <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
             <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
-            <button class="btn btn-secondary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
+            <button class="btn btn-primary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
             <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
             <button class="btn btn-secondary btn-small" id="download-pdf-btn" title="Download PDF">${Icons.download16} PDF</button>
             <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} ZIP</button>
             <button class="btn btn-secondary btn-small" id="toggle-preview-btn" title="Toggle preview">${Icons.eye16} Preview</button>
-            <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
-            <button class="btn-icon" id="editor-logout-btn" title="Logout">${Icons.logout16}</button>
+            <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme" aria-label="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
+            <button class="btn-icon" id="editor-logout-btn" title="Logout" aria-label="Logout">${Icons.logout16}</button>
           </div>
         </div>
         <div class="editor-main">
@@ -278,6 +347,9 @@ const App = {
             </div>
           </div>
           <div class="editor-pane">
+            <div class="editor-tabbar">
+              <div class="editor-tab active" id="current-file-tab">${Icons.fileTex} No file</div>
+            </div>
             <div class="editor-container" id="monaco-editor"></div>
           </div>
           <div class="preview-pane" id="preview-pane">
@@ -372,12 +444,22 @@ const App = {
     const previewContainer = document.getElementById('preview-container');
     previewContainer.innerHTML = '';
     Preview.init(previewContainer);
+    this.previewVisible = !window.matchMedia('(max-width: 1180px)').matches;
+    const previewPane = document.getElementById('preview-pane');
+    const editorMain = document.querySelector('.editor-main');
+    const previewToggle = document.getElementById('toggle-preview-btn');
+    if (!this.previewVisible && previewPane) previewPane.classList.add('hidden');
+    if (editorMain) editorMain.classList.toggle('preview-open', this.previewVisible);
+    if (previewToggle) previewToggle.classList.toggle('active', this.previewVisible);
 
     // Load existing PDF
     this.loadPdf();
 
     // Event handlers
     document.getElementById('compile-btn').addEventListener('click', () => this.compile());
+    document.getElementById('compile-status').addEventListener('click', () => {
+      if (this.lastCompileErrors.length > 0) this.showCompileErrorsModal();
+    });
     document.getElementById('download-btn').addEventListener('click', () => this.downloadProject());
     document.getElementById('download-pdf-btn').addEventListener('click', () => this.downloadPdf());
     document.getElementById('toggle-preview-btn').addEventListener('click', () => this.togglePreview());
@@ -509,6 +591,10 @@ const App = {
 
       Editor.setContext(this.currentProjectId, path);
       Editor.setValue(content);
+      const currentFileTab = document.getElementById('current-file-tab');
+      if (currentFileTab) {
+        currentFileTab.innerHTML = `${Icons.fileTex} ${this.escapeHtml(path)}`;
+      }
       this.fileTree.selectFile(path);
       Editor.setCompileErrors([], path);
     } catch (err) {
@@ -517,26 +603,74 @@ const App = {
   },
 
   async promptNewFile() {
-    const path = prompt('Enter file path (e.g., chapters/intro.tex):');
-    if (!path || !path.trim()) return;
-    const filePath = path.trim();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <h2>New File</h2>
+        <form id="new-file-form">
+          <div class="form-group">
+            <label for="new-file-path">File path</label>
+            <input id="new-file-path" type="text" placeholder="chapters/intro.tex" autocomplete="off" required>
+            <div class="field-error" id="new-file-error" role="alert"></div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" id="new-file-cancel">Cancel</button>
+            <button class="btn btn-primary" type="submit" id="new-file-submit">Create</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
 
-    if (this.projectFiles.some(f => f.path === filePath)) {
-      alert('File already exists');
-      return;
-    }
+    const close = () => overlay.remove();
+    const pathInput = overlay.querySelector('#new-file-path');
+    const errorEl = overlay.querySelector('#new-file-error');
+    const submitBtn = overlay.querySelector('#new-file-submit');
 
-    try {
-      const file = await api.post(`/projects/${this.currentProjectId}/files`, {
-        path: filePath,
-        content: `\\input{${filePath.replace(/^.*\//, '').replace('.tex', '')}}`,
-      });
-      this.projectFiles.push(file);
-      this.fileTree.setFiles(this.projectFiles);
-      this.openFile(filePath);
-    } catch (err) {
-      alert('Failed to create file: ' + err.message);
-    }
+    overlay.querySelector('#new-file-cancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    overlay.querySelector('#new-file-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const filePath = pathInput.value.trim();
+      errorEl.textContent = '';
+
+      if (!filePath) {
+        errorEl.textContent = 'File path is required.';
+        return;
+      }
+      if (filePath.startsWith('/') || filePath.split(/[\\/]+/).includes('..')) {
+        errorEl.textContent = 'Use a project-relative path.';
+        return;
+      }
+      if (this.projectFiles.some(f => f.path === filePath)) {
+        errorEl.textContent = 'File already exists.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `${Icons.clock14} Creating...`;
+      try {
+        const file = await api.post(`/projects/${this.currentProjectId}/files`, {
+          path: filePath,
+          content: filePath.endsWith('.tex')
+            ? `% ${filePath}\n`
+            : '',
+        });
+        this.projectFiles.push(file);
+        this.fileTree.setFiles(this.projectFiles);
+        this.openFile(filePath);
+        close();
+      } catch (err) {
+        errorEl.textContent = 'Failed to create file: ' + err.message;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Create';
+      }
+    });
+
+    pathInput.focus();
   },
 
   async deleteFile(path) {
@@ -565,8 +699,14 @@ const App = {
     this.isCompiling = true;
 
     const statusEl = document.getElementById('compile-status');
+    const compileBtn = document.getElementById('compile-btn');
     statusEl.innerHTML = `${Icons.clock14} Compiling...`;
     statusEl.className = 'compile-status compiling';
+    this.lastCompileErrors = [];
+    if (compileBtn) {
+      compileBtn.disabled = true;
+      compileBtn.innerHTML = `${Icons.clock14} Compiling...`;
+    }
 
     try {
       if (Editor.currentFilePath) {
@@ -574,19 +714,32 @@ const App = {
       }
 
       const result = await api.post(`/projects/${this.currentProjectId}/compile`);
+      const issues = Array.isArray(result.errors) ? result.errors : [];
+      const errors = issues.filter((e) => e.severity !== 'warning');
+      const warnings = issues.filter((e) => e.severity === 'warning');
+      this.lastCompileErrors = issues;
 
       if (result.success && result.pdfGenerated) {
-        statusEl.innerHTML = `${Icons.check14} Compiled`;
-        statusEl.className = 'compile-status success';
+        if (warnings.length > 0) {
+          statusEl.innerHTML = `${Icons.xCircle14} Compiled with ${warnings.length} warning(s)`;
+          statusEl.className = 'compile-status warning';
+          Editor.setCompileErrors(issues, Editor.currentFilePath);
+          this.notify(`Compiled with ${warnings.length} warning(s)`, 'info');
+        } else {
+          statusEl.innerHTML = `${Icons.check14} Compiled just now`;
+          statusEl.className = 'compile-status success';
+          Editor.setCompileErrors([], Editor.currentFilePath);
+          this.notify('Compilation successful!', 'success');
+        }
         this.loadPdf();
-        this.notify('Compilation successful!', 'success');
       } else {
-        statusEl.innerHTML = `${Icons.xCircle14} ${result.errors.length} error(s)`;
+        statusEl.innerHTML = `${Icons.xCircle14} Failed: ${errors.length || issues.length} error(s)`;
         statusEl.className = 'compile-status error';
-        if (result.errors.length > 0) {
-          Editor.setCompileErrors(result.errors, Editor.currentFilePath);
-          const msgs = result.errors.slice(0, 5).map(e => `Line ${e.line}: ${e.message}`).join('\n');
+        if (issues.length > 0) {
+          Editor.setCompileErrors(issues, Editor.currentFilePath);
+          const msgs = issues.slice(0, 5).map(e => `Line ${e.line}: ${e.message}`).join('\n');
           this.notify('Compilation failed:\n' + msgs, 'error');
+          this.showCompileErrorsModal();
         } else {
           this.notify('Compilation failed', 'error');
         }
@@ -597,10 +750,57 @@ const App = {
     } catch (err) {
       statusEl.innerHTML = `${Icons.xCircle14} Error`;
       statusEl.className = 'compile-status error';
+      this.lastCompileErrors = [{ line: 0, message: err.message, severity: 'error' }];
       this.notify('Compilation error: ' + err.message, 'error');
     } finally {
       this.isCompiling = false;
+      if (compileBtn) {
+        compileBtn.disabled = false;
+        compileBtn.innerHTML = `${Icons.play16} Compile`;
+      }
     }
+  },
+
+  showCompileErrorsModal() {
+    const issues = this.lastCompileErrors || [];
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal compile-log-modal">
+        <h2>Compile logs</h2>
+        ${issues.length === 0 ? `
+          <div class="empty-state">
+            <div class="icon">${Icons.check}</div>
+            <p>No compile issues for the current run.</p>
+          </div>
+        ` : `
+          <div class="log-list">
+            ${issues.map((issue, index) => `
+              <button class="log-row ${issue.severity === 'warning' ? 'warning' : 'error'}" data-index="${index}" type="button">
+                <span class="log-severity">${issue.severity === 'warning' ? 'Warning' : 'Error'}</span>
+                <span class="log-line">Line ${issue.line || 0}</span>
+                <span class="log-message">${this.escapeHtml(issue.message || 'Unknown compile issue')}</span>
+              </button>
+            `).join('')}
+          </div>
+        `}
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="compile-log-close">Close</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#compile-log-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelectorAll('.log-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        const issue = issues[parseInt(row.dataset.index, 10)];
+        if (issue && issue.line) {
+          Editor.revealLine(issue.line);
+          overlay.remove();
+        }
+      });
+    });
   },
 
   async loadPdf() {
@@ -626,8 +826,20 @@ const App = {
   togglePreview() {
     this.previewVisible = !this.previewVisible;
     const pane = document.getElementById('preview-pane');
+    const main = document.querySelector('.editor-main');
+    const button = document.getElementById('toggle-preview-btn');
     if (pane) {
       pane.classList.toggle('hidden', !this.previewVisible);
+    }
+    if (main) {
+      main.classList.toggle('preview-open', this.previewVisible);
+    }
+    if (button) {
+      button.classList.toggle('active', this.previewVisible);
+    }
+    if (this.previewVisible) {
+      this.updatePdfPageInfo();
+      this.loadPdf();
     }
   },
 
@@ -842,6 +1054,7 @@ const App = {
       try {
         const headers = { 'Authorization': `Bearer ${api.token}` };
         const res = await fetch(`/api/projects/${this.currentProjectId}/history/${selectedSnapshot}/files/${filePath}`, { headers });
+        if (!res.ok) throw new Error('File is not available in this snapshot');
         const content = await res.text();
         await api.put(`/projects/${this.currentProjectId}/files/${filePath}`, { content });
         Editor.setValue(content);
@@ -859,7 +1072,10 @@ const App = {
     try {
       const headers = { 'Authorization': `Bearer ${api.token}` };
       const [oldRes, newContent] = await Promise.all([
-        fetch(`/api/projects/${this.currentProjectId}/history/${timestamp}/files/${filePath}`, { headers }).then(r => r.text()),
+        fetch(`/api/projects/${this.currentProjectId}/history/${timestamp}/files/${filePath}`, { headers }).then(async r => {
+          if (!r.ok) throw new Error('This file is not present in the selected snapshot.');
+          return r.text();
+        }),
         Editor.getValue(),
       ]);
 
@@ -876,7 +1092,7 @@ const App = {
         });
       });
     } catch (err) {
-      diffContainer.innerHTML = `<div style="padding:20px;color:var(--error)">Could not load file for this snapshot</div>`;
+      diffContainer.innerHTML = `<div class="empty-state"><div class="icon">${Icons.clock}</div><p>${this.escapeHtml(err.message || 'Could not load file for this snapshot')}</p></div>`;
     }
   },
 

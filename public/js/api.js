@@ -40,7 +40,9 @@ class Api {
         const refreshed = await this.request('POST', '/auth/refresh', { refreshToken: this.refreshToken }, { skipRetry: true });
         this.setTokens(refreshed.accessToken, refreshed.refreshToken);
         headers['Authorization'] = `Bearer ${this.token}`;
-        return fetch(`${API_BASE}${path}`, { method, headers, body: body ? JSON.stringify(body) : null });
+        const retryRes = await fetch(`${API_BASE}${path}`, { method, headers, body: body ? JSON.stringify(body) : null });
+        if (!retryRes.ok) await this.throwResponseError(retryRes);
+        return retryRes;
       } catch {
         this.clearTokens();
         window.location.hash = '#/login';
@@ -48,7 +50,21 @@ class Api {
       }
     }
 
+    if (!res.ok) await this.throwResponseError(res);
     return res;
+  }
+
+  async throwResponseError(res) {
+    const text = await res.text();
+    try {
+      const payload = JSON.parse(text);
+      throw new Error(payload.error || payload.message || `Request failed (${res.status})`);
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        throw new Error(text || `Request failed (${res.status})`);
+      }
+      throw err;
+    }
   }
 
   async get(path) {

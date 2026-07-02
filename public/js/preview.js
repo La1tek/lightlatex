@@ -59,7 +59,10 @@ const Preview = {
     for (let i = 1; i <= totalPages; i++) {
       try {
         const page = await pdfDoc.getPage(i);
-        const containerWidth = previewContainer.clientWidth - 40;
+        const visibleWidth = previewContainer.clientWidth
+          || previewContainer.closest('.preview-pane')?.clientWidth
+          || 760;
+        const containerWidth = Math.max(320, visibleWidth - 40);
         const scale = Math.min(containerWidth / page.getViewport({ scale: 1 }).width, 2.0);
         const viewport = page.getViewport({ scale });
 

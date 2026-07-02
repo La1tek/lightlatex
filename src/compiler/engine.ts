@@ -4,6 +4,18 @@ import path from "path";
 import os from "os";
 import { ensureDir } from "../storage/fs";
 
+const ALLOWED_COMPILERS = new Set(["pdflatex", "xelatex", "lualatex"]);
+const INTERNAL_DIRS = new Set([".snapshots"]);
+const GENERATED_OUTPUTS = new Set([
+  "output.pdf",
+  "output.log",
+  "output.aux",
+  "output.out",
+  "output.toc",
+  "output.fls",
+  "output.fdb_latexmk",
+]);
+
 interface CompileResult {
   success: boolean;
   errors: CompileError[];
@@ -28,6 +40,11 @@ export async function compileProject(
 
   // Ensure output dir exists
   await ensureDir(projectDir);
+  if (!isSafeMainFile(mainFile)) {
+    throw new Error("Invalid main file path");
+  }
+
+  const compilerBin = getCompiler(compiler);
 
   // Create sandbox
   const sandboxDir = path.join(os.tmpdir(), `lightlatex-${projectId}-${Date.now()}`);
@@ -44,7 +61,6 @@ export async function compileProject(
     }
 
     // Run compiler
-    const compilerBin = compiler || "pdflatex";
     const errors: CompileError[] = [];
 
     const result = await runCompiler(compilerBin, sandboxDir, mainFile, errors);
@@ -73,6 +89,20 @@ export async function compileProject(
     // Cleanup sandbox
     await fs.promises.rm(sandboxDir, { recursive: true, force: true });
   }
+}
+
+function getCompiler(value: string): string {
+  const compiler = value || "pdflatex";
+  if (!ALLOWED_COMPILERS.has(compiler)) {
+    throw new Error("Unsupported compiler");
+  }
+  return compiler;
+}
+
+function isSafeMainFile(mainFile: string): boolean {
+  return mainFile.endsWith(".tex")
+    && !path.isAbsolute(mainFile)
+    && !mainFile.split(/[\\/]+/).includes("..");
 }
 
 function runCompiler(
@@ -169,6 +199,10 @@ async function copyDir(src: string, dest: string) {
   await fs.promises.mkdir(dest, { recursive: true });
   const entries = await fs.promises.readdir(src, { withFileTypes: true });
   for (const entry of entries) {
+    if (entry.isDirectory() && INTERNAL_DIRS.has(entry.name)) continue;
+    if (!entry.isDirectory() && GENERATED_OUTPUTS.has(entry.name)) continue;
+    if (!entry.isDirectory() && entry.name.endsWith(".synctex.gz")) continue;
+
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {

@@ -3,7 +3,8 @@ import { authMiddleware, AuthRequest } from "../auth/middleware";
 import { db } from "../db";
 import { projects, files } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, ensureDir, getProjectDir, createSnapshot, listSnapshots, getSnapshotFile, renameFile } from "../storage/fs";
+import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, ensureDir, getProjectDir, listSnapshots, getSnapshotFile, renameFile, resolveProjectPath } from "../storage/fs";
+import { syncFileRecords, upsertFileRecord } from "../storage/fileRegistry";
 import { p, pw } from "../utils";
 import multer from "multer";
 import fs from "fs/promises";
@@ -41,10 +42,7 @@ router.post("/:id/files", async (req: AuthRequest, res: Response) => {
     if (!filePath) return res.status(400).json({ error: "File path required" });
 
     await writeFile(id, filePath, content || "");
-    const [file] = await db.insert(files).values({
-      projectId: id,
-      path: filePath,
-    }).returning();
+    const file = await upsertFileRecord(id, filePath);
 
     res.status(201).json(file);
   } catch (err: any) {
@@ -60,10 +58,7 @@ router.get("/:id/files/*", async (req: AuthRequest, res: Response) => {
     const filePath = pw(req);
     if (!filePath) return res.status(400).json({ error: "File path required" });
 
-    const fullPath = path.join(getProjectDir(id), filePath);
-    if (!fullPath.startsWith(getProjectDir(id))) {
-      return res.status(400).json({ error: "Invalid file path" });
-    }
+    const fullPath = resolveProjectPath(id, filePath);
 
     // Detect binary vs text
     const ext = (filePath.split('.').pop() || '').toLowerCase();
@@ -84,6 +79,24 @@ router.get("/:id/files/*", async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Rename file. This must be declared before the generic PUT /:id/files/* route.
+router.put("/:id/files/rename", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = p(req, "id");
+    await verifyProject(id, req.userId!);
+    const { oldPath, newPath } = req.body;
+    if (!oldPath || !newPath) return res.status(400).json({ error: "oldPath and newPath required" });
+
+    await renameFile(id, oldPath, newPath);
+    await db.delete(files).where(and(eq(files.projectId, id), eq(files.path, oldPath)));
+    await upsertFileRecord(id, newPath);
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(err.message.includes("not found") ? 404 : 400).json({ error: err.message });
+  }
+});
+
 // Update file content
 router.put("/:id/files/*", async (req: AuthRequest, res: Response) => {
   try {
@@ -94,16 +107,7 @@ router.put("/:id/files/*", async (req: AuthRequest, res: Response) => {
     if (content === undefined) return res.status(400).json({ error: "Content required" });
 
     await writeFile(id, filePath, content);
-
-    const existing = await db.select().from(files)
-      .where(and(eq(files.projectId, id), eq(files.path, filePath))).limit(1);
-
-    if (existing.length > 0) {
-      await db.update(files).set({ updatedAt: new Date() })
-        .where(eq(files.id, existing[0].id));
-    } else {
-      await db.insert(files).values({ projectId: id, path: filePath });
-    }
+    await upsertFileRecord(id, filePath);
 
     res.json({ ok: true });
   } catch (err: any) {
@@ -138,10 +142,12 @@ router.post("/:id/upload", upload.single("zip"), async (req: AuthRequest, res: R
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
     await extractZipToProject(id, req.file.path);
+    await syncFileRecords(id);
     await fs.unlink(req.file.path);
 
     res.json({ ok: true });
   } catch (err: any) {
+    if (req.file) await fs.unlink(req.file.path).catch(() => {});
     res.status(400).json({ error: err.message });
   }
 });
@@ -182,16 +188,11 @@ router.post("/:id/upload-image", imageUpload.single('image'), async (req: AuthRe
 
     // Register in DB
     const filePath = `images/${originalName}`;
-    const existing = await db.select().from(files)
-      .where(and(eq(files.projectId, id), eq(files.path, filePath))).limit(1);
-    if (existing.length === 0) {
-      await db.insert(files).values({ projectId: id, path: filePath });
-    } else {
-      await db.update(files).set({ updatedAt: new Date() }).where(eq(files.id, existing[0].id));
-    }
+    await upsertFileRecord(id, filePath);
 
     res.json({ ok: true, path: filePath, name: originalName });
   } catch (err: any) {
+    if (req.file) await fs.unlink(req.file.path).catch(() => {});
     res.status(400).json({ error: err.message });
   }
 });
@@ -222,7 +223,7 @@ router.get("/:id/files-with-hashes", async (req: AuthRequest, res: Response) => 
     const result = [];
     for (const f of list) {
       try {
-        const content = await fs.readFile(path.join(getProjectDir(id), f.path));
+        const content = await fs.readFile(resolveProjectPath(id, f.path));
         const hash = crypto.createHash('sha256').update(content).digest('hex');
         result.push({ path: f.path, hash, updatedAt: f.updatedAt });
       } catch {
@@ -248,7 +249,7 @@ router.post("/:id/sync", async (req: AuthRequest, res: Response) => {
     const serverMap = new Map<string, { hash: string; updatedAt: Date }>();
     for (const sf of serverFiles) {
       try {
-        const content = await fs.readFile(path.join(getProjectDir(id), sf.path));
+        const content = await fs.readFile(resolveProjectPath(id, sf.path));
         const hash = crypto.createHash('sha256').update(content).digest('hex');
         serverMap.set(sf.path, { hash, updatedAt: sf.updatedAt });
       } catch {
@@ -266,17 +267,12 @@ router.post("/:id/sync", async (req: AuthRequest, res: Response) => {
       if (!server) {
         // New file on client — push
         await writeFile(id, cf.path, cf.content);
-        const existing = await db.select().from(files).where(and(eq(files.projectId, id), eq(files.path, cf.path))).limit(1);
-        if (existing.length === 0) {
-          await db.insert(files).values({ projectId: id, path: cf.path });
-        } else {
-          await db.update(files).set({ updatedAt: new Date() }).where(eq(files.id, existing[0].id));
-        }
+        await upsertFileRecord(id, cf.path);
         pushed.push(cf.path);
       } else if (server.hash !== cf.hash) {
         // Conflict — last-write-wins: client wins (client is pushing)
         await writeFile(id, cf.path, cf.content);
-        await db.update(files).set({ updatedAt: new Date() }).where(eq(files.id, (await db.select().from(files).where(and(eq(files.projectId, id), eq(files.path, cf.path))).limit(1))[0].id));
+        await upsertFileRecord(id, cf.path);
         conflicts.push(cf.path);
         pushed.push(cf.path);
       }
@@ -288,7 +284,7 @@ router.post("/:id/sync", async (req: AuthRequest, res: Response) => {
     for (const [sp, info] of serverMap) {
       if (!clientPaths.has(sp)) {
         try {
-          const content = await fs.readFile(path.join(getProjectDir(id), sp), 'utf-8');
+          const content = await fs.readFile(resolveProjectPath(id, sp), 'utf-8');
           pulled.push({ path: sp, hash: info.hash, content } as any);
         } catch {
           pulled.push({ path: sp, hash: info.hash, content: '' } as any);
@@ -297,26 +293,6 @@ router.post("/:id/sync", async (req: AuthRequest, res: Response) => {
     }
 
     res.json({ pushed, pulled, conflicts });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// ===== File rename =====
-router.put("/:id/files/rename", async (req: AuthRequest, res: Response) => {
-  try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
-    const { oldPath, newPath } = req.body;
-    if (!oldPath || !newPath) return res.status(400).json({ error: "oldPath and newPath required" });
-
-    await renameFile(id, oldPath, newPath);
-
-    // Update DB
-    await db.delete(files).where(and(eq(files.projectId, id), eq(files.path, oldPath)));
-    await db.insert(files).values({ projectId: id, path: newPath });
-
-    res.json({ ok: true });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

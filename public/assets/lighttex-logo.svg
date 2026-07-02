@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">LightTeX logo</title>
+  <desc id="desc">A dark rounded square with a teal document mark and folded page corner.</desc>
+  <defs>
+    <linearGradient id="ltx-bg" x1="82" y1="60" x2="430" y2="452" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172438"/>
+      <stop offset="1" stop-color="#071525"/>
+    </linearGradient>
+    <linearGradient id="ltx-accent" x1="132" y1="132" x2="362" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C9F8E6"/>
+      <stop offset=".5" stop-color="#64D8B6"/>
+      <stop offset="1" stop-color="#23B99A"/>
+    </linearGradient>
+    <linearGradient id="ltx-muted" x1="318" y1="244" x2="405" y2="321" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D8E6F5"/>
+      <stop offset="1" stop-color="#7E91AB"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#ltx-bg)"/>
+  <path d="M162 148c5-31 21-46 50-46h104c16 0 30 6 41 17l59 58c12 12 18 27 18 43v146c0 30-16 46-47 46H161c-31 0-46-16-41-46l35-218c1-8 3-15 7-20Z" fill="#071525" opacity=".62"/>
+  <path d="M173 148c4-24 16-36 39-36h103c12 0 23 5 32 13l58 58c9 9 14 21 14 34v145" fill="none" stroke="url(#ltx-accent)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M315 112v74c0 18 10 28 28 28h76" fill="url(#ltx-accent)" opacity=".95"/>
+  <path d="M214 247 194 347h78" fill="none" stroke="url(#ltx-accent)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M161 412h111" fill="none" stroke="url(#ltx-accent)" stroke-width="28" stroke-linecap="round"/>
+  <path d="M337 269h60M337 314h60M337 359h60" fill="none" stroke="url(#ltx-muted)" stroke-width="18" stroke-linecap="round"/>
+</svg>
