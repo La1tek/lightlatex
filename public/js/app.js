@@ -16,6 +16,8 @@ const App = {
   syncConflicts: [],
   devMode: false,
   accessRole: 'owner',
+  workspaceMode: 'split',
+  focusMode: false,
 
   async init() {
     const theme = localStorage.getItem('theme') || 'light';
@@ -524,6 +526,9 @@ const App = {
             <button class="btn btn-secondary btn-small" id="download-pdf-btn" title="Download PDF">${Icons.download16} PDF</button>
             <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} ZIP</button>
             <button class="btn btn-secondary btn-small" id="toggle-preview-btn" title="Toggle preview">${Icons.eye16} Preview</button>
+            <button class="btn btn-secondary btn-small" id="layout-btn" title="Workspace layout">${Icons.layout16} Layout</button>
+            <button class="btn btn-secondary btn-small" id="focus-btn" title="Focus mode">${Icons.focus16} Focus</button>
+            <button class="btn btn-secondary btn-small" id="shortcuts-btn" title="Keyboard shortcuts">${Icons.keyboard16} Keys</button>
             <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme" aria-label="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
             <button class="btn-icon" id="editor-logout-btn" title="Logout" aria-label="Logout">${Icons.logout16}</button>
           </div>
@@ -684,13 +689,13 @@ const App = {
     const previewContainer = document.getElementById('preview-container');
     previewContainer.innerHTML = '';
     Preview.init(previewContainer);
-    this.previewVisible = !window.matchMedia('(max-width: 1180px)').matches;
-    const previewPane = document.getElementById('preview-pane');
-    const editorMain = document.querySelector('.editor-main');
-    const previewToggle = document.getElementById('toggle-preview-btn');
-    if (!this.previewVisible && previewPane) previewPane.classList.add('hidden');
-    if (editorMain) editorMain.classList.toggle('preview-open', this.previewVisible);
-    if (previewToggle) previewToggle.classList.toggle('active', this.previewVisible);
+    this.workspaceMode = localStorage.getItem('lighttex-workspace-mode') || 'split';
+    this.focusMode = localStorage.getItem('lighttex-focus-mode') === 'true';
+    if (window.matchMedia('(max-width: 1180px)').matches && this.workspaceMode === 'split') {
+      this.workspaceMode = 'editor';
+    }
+    this.setWorkspaceMode(this.workspaceMode, { persist: false });
+    this.applyFocusMode();
 
     // Load existing PDF
     this.loadPdf();
@@ -704,6 +709,9 @@ const App = {
     document.getElementById('download-btn').addEventListener('click', () => this.downloadProject());
     document.getElementById('download-pdf-btn').addEventListener('click', () => this.downloadPdf());
     document.getElementById('toggle-preview-btn').addEventListener('click', () => this.togglePreview());
+    document.getElementById('layout-btn').addEventListener('click', () => this.showLayoutModal());
+    document.getElementById('focus-btn').addEventListener('click', () => this.toggleFocusMode());
+    document.getElementById('shortcuts-btn').addEventListener('click', () => this.showShortcutsModal());
     document.getElementById('settings-btn').addEventListener('click', () => this.showProjectSettingsModal());
     document.getElementById('preflight-btn').addEventListener('click', () => this.showPreflightCheck());
     document.getElementById('toggle-theme-btn').addEventListener('click', () => this.toggleTheme());
@@ -1602,24 +1610,149 @@ const App = {
     if (zoom) zoom.textContent = Preview.getZoomLabel();
   },
 
-  togglePreview() {
-    this.previewVisible = !this.previewVisible;
-    const pane = document.getElementById('preview-pane');
+  workspaceModeLabel(mode = this.workspaceMode) {
+    return mode === 'editor' ? 'Editor only' : mode === 'pdf' ? 'PDF only' : 'Split';
+  },
+
+  setWorkspaceMode(mode, options = {}) {
+    const nextMode = ['split', 'editor', 'pdf'].includes(mode) ? mode : 'split';
+    this.workspaceMode = nextMode;
+    if (options.persist !== false) localStorage.setItem('lighttex-workspace-mode', nextMode);
+
     const main = document.querySelector('.editor-main');
-    const button = document.getElementById('toggle-preview-btn');
-    if (pane) {
-      pane.classList.toggle('hidden', !this.previewVisible);
-    }
+    const previewPane = document.getElementById('preview-pane');
+    const editorPane = document.querySelector('.editor-pane');
+    const layoutBtn = document.getElementById('layout-btn');
+    const previewToggle = document.getElementById('toggle-preview-btn');
     if (main) {
-      main.classList.toggle('preview-open', this.previewVisible);
+      main.classList.remove('split-mode', 'editor-only', 'pdf-only', 'preview-open');
+      main.classList.add(nextMode === 'editor' ? 'editor-only' : nextMode === 'pdf' ? 'pdf-only' : 'split-mode');
+      main.classList.toggle('preview-open', nextMode === 'pdf');
     }
-    if (button) {
-      button.classList.toggle('active', this.previewVisible);
+    if (previewPane) previewPane.classList.toggle('hidden', nextMode === 'editor');
+    if (editorPane) editorPane.classList.toggle('hidden', nextMode === 'pdf');
+    if (layoutBtn) {
+      layoutBtn.innerHTML = `${Icons.layout16} ${this.workspaceModeLabel(nextMode)}`;
+      layoutBtn.classList.toggle('active', nextMode !== 'split');
     }
-    if (this.previewVisible) {
+    if (previewToggle) previewToggle.classList.toggle('active', nextMode !== 'editor');
+    if (nextMode !== 'editor') {
       this.updatePdfPageInfo();
       this.loadPdf();
     }
+  },
+
+  togglePreview() {
+    this.setWorkspaceMode(this.workspaceMode === 'editor' ? 'split' : 'editor');
+  },
+
+  applyFocusMode() {
+    const layout = document.querySelector('.editor-layout');
+    const button = document.getElementById('focus-btn');
+    if (layout) layout.classList.toggle('focus-mode', this.focusMode);
+    if (button) {
+      button.classList.toggle('active', this.focusMode);
+      button.innerHTML = `${Icons.focus16} ${this.focusMode ? 'Exit focus' : 'Focus'}`;
+    }
+  },
+
+  toggleFocusMode() {
+    this.focusMode = !this.focusMode;
+    localStorage.setItem('lighttex-focus-mode', String(this.focusMode));
+    this.applyFocusMode();
+    this.notify(this.focusMode ? 'Focus mode enabled' : 'Focus mode disabled', 'info');
+  },
+
+  showLayoutModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal layout-modal" role="dialog" aria-label="Workspace layout">
+        <div class="modal-heading-row">
+          <div>
+            <h2>Workspace Layout</h2>
+            <p class="modal-subtitle">Choose how editor and PDF preview share the workspace.</p>
+          </div>
+          <button class="btn-icon" type="button" id="layout-close" title="Close layout" aria-label="Close layout">${Icons.x}</button>
+        </div>
+        <div class="layout-options">
+          ${[
+            ['split', 'Split', 'Editor and PDF side by side.'],
+            ['editor', 'Editor only', 'Hide PDF preview and keep file tree visible.'],
+            ['pdf', 'PDF only', 'Inspect the compiled document.'],
+          ].map(([mode, label, hint]) => `
+            <button class="layout-option ${this.workspaceMode === mode ? 'selected' : ''}" type="button" data-layout-mode="${mode}">
+              <span>${Icons.layout16}</span>
+              <strong>${label}</strong>
+              <small>${hint}</small>
+            </button>
+          `).join('')}
+        </div>
+        <label class="switch-row">
+          <span>Focus mode</span>
+          <input type="checkbox" id="layout-focus-toggle" ${this.focusMode ? 'checked' : ''}>
+        </label>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#layout-close').addEventListener('click', close);
+    overlay.querySelectorAll('[data-layout-mode]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.setWorkspaceMode(button.dataset.layoutMode);
+        overlay.querySelectorAll('[data-layout-mode]').forEach((item) => item.classList.remove('selected'));
+        button.classList.add('selected');
+      });
+    });
+    overlay.querySelector('#layout-focus-toggle').addEventListener('change', (e) => {
+      this.focusMode = e.target.checked;
+      localStorage.setItem('lighttex-focus-mode', String(this.focusMode));
+      this.applyFocusMode();
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  },
+
+  showShortcutsModal() {
+    const mod = navigator.platform.toLowerCase().includes('mac') ? 'Cmd' : 'Ctrl';
+    const shortcuts = [
+      [`${mod}+S`, 'Compile current project'],
+      [`${mod}+Shift+S`, 'Autosave then compile'],
+      [`${mod}+K`, 'Command palette'],
+      [`${mod}+P`, 'Open file palette'],
+      [`${mod}+Shift+F`, 'Search across project'],
+      [`${mod}+\\`, 'Toggle focus mode'],
+      [`${mod}+Alt+1`, 'Split layout'],
+      [`${mod}+Alt+2`, 'Editor-only layout'],
+      [`${mod}+Alt+3`, 'PDF-only layout'],
+      [`${mod}+?`, 'Show this shortcut list'],
+    ];
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal shortcuts-modal" role="dialog" aria-label="Keyboard shortcuts">
+        <div class="modal-heading-row">
+          <div>
+            <h2>Keyboard Shortcuts</h2>
+            <p class="modal-subtitle">Fast navigation and workspace controls.</p>
+          </div>
+          <button class="btn-icon" type="button" id="shortcuts-close" title="Close shortcuts" aria-label="Close shortcuts">${Icons.x}</button>
+        </div>
+        <div class="shortcut-list">
+          ${shortcuts.map(([keys, label]) => `
+            <div class="shortcut-row">
+              <kbd>${this.escapeHtml(keys)}</kbd>
+              <span>${this.escapeHtml(label)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#shortcuts-close').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   },
 
   async downloadPdf() {
@@ -2764,6 +2897,21 @@ const App = {
       } else if (e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         this.showSearchModal();
+      } else if (e.key === '\\') {
+        e.preventDefault();
+        this.toggleFocusMode();
+      } else if (e.altKey && e.key === '1') {
+        e.preventDefault();
+        this.setWorkspaceMode('split');
+      } else if (e.altKey && e.key === '2') {
+        e.preventDefault();
+        this.setWorkspaceMode('editor');
+      } else if (e.altKey && e.key === '3') {
+        e.preventDefault();
+        this.setWorkspaceMode('pdf');
+      } else if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        this.showShortcutsModal();
       }
     };
     document.addEventListener('keydown', this.editorShortcutHandler);
