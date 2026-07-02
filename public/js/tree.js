@@ -7,11 +7,23 @@ class FileTree {
     this.onRename = options.onRename || (() => {});
     this.projectId = options.projectId || null;
     this.files = [];
+    this.hashes = new Map();
+    this.devMode = options.devMode || false;
     this.selectedPath = null;
   }
 
   setFiles(files) {
     this.files = files;
+    this.render();
+  }
+
+  setHashes(hashes) {
+    this.hashes = new Map((hashes || []).map((item) => [item.path, item.hash]));
+    this.render();
+  }
+
+  setDevMode(enabled) {
+    this.devMode = Boolean(enabled);
     this.render();
   }
 
@@ -102,7 +114,10 @@ class FileTree {
 
         const safePath = this.escapeHtml(child.file.path);
         const safeName = this.escapeHtml(name);
-        el.innerHTML = `${indent}<span class="icon">${icon}</span><span class="name">${safeName}</span>
+        const hash = this.hashes.get(child.file.path);
+        const hashTitle = hash ? ` title="${safePath} · sha256 ${this.escapeHtml(hash)}"` : ` title="${safePath}"`;
+        el.innerHTML = `${indent}<span class="icon">${icon}</span><span class="name"${hashTitle}>${safeName}</span>
+          ${this.devMode && hash ? `<span class="file-hash" title="sha256 ${this.escapeHtml(hash)}">${this.escapeHtml(hash.slice(0, 7))}</span>` : ''}
           <span class="file-actions">
             <button title="Rename" aria-label="Rename ${safePath}" data-rename="${safePath}">${Icons.settings}</button>
             <button title="Delete" aria-label="Delete ${safePath}" data-delete="${safePath}">${Icons.trash14}</button>

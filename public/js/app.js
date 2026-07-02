@@ -11,6 +11,10 @@ const App = {
   logsPanelVisible: false,
   structureRefreshTimer: null,
   citationEntries: [],
+  fileHashes: [],
+  syncState: 'synced',
+  syncConflicts: [],
+  devMode: false,
 
   async init() {
     const theme = localStorage.getItem('theme') || 'light';
@@ -303,6 +307,7 @@ const App = {
     this.currentProjectId = projectId;
     Editor.dispose();
     Preview.clear();
+    this.devMode = localStorage.getItem('lighttex-dev-mode') === 'true';
 
     const currentTheme = document.documentElement.dataset.theme;
 
@@ -317,6 +322,7 @@ const App = {
             <button class="compile-status" id="compile-status" type="button" title="Compile status">${Icons.play16} Idle</button>
           </div>
           <div class="editor-toolbar-right">
+            <button class="sync-status synced" id="sync-status-btn" type="button" title="CLI sync status">${Icons.sync16} Synced</button>
             <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
             <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} Symbols</button>
             <button class="btn btn-secondary btn-small" id="citation-manager-btn" title="Citation manager">${Icons.cite16} Cite</button>
@@ -452,8 +458,10 @@ const App = {
       onCreate: () => this.promptNewFile(),
       onDelete: (path) => this.deleteFile(path),
       onRename: (oldPath, newPath) => this.renameFile(oldPath, newPath),
+      devMode: this.devMode,
     });
     this.fileTree.setFiles(this.projectFiles);
+    this.refreshFileHashes();
 
     // Select main file
     if (project.mainFile && this.projectFiles.some(f => f.path === project.mainFile)) {
@@ -475,6 +483,7 @@ const App = {
       onDirty: () => {
         const saveState = document.getElementById('save-state');
         if (saveState) saveState.textContent = 'Unsaved changes';
+        this.updateSyncStatus('local', 'Unsaved local editor changes');
         this.queueStructureRefresh();
       },
       onCompile: () => this.compile(),
@@ -497,6 +506,7 @@ const App = {
 
     // Event handlers
     document.getElementById('compile-btn').addEventListener('click', () => this.compile());
+    document.getElementById('sync-status-btn').addEventListener('click', () => this.showSyncCenter());
     document.getElementById('compile-status').addEventListener('click', () => {
       this.openCompilePanel();
     });
@@ -563,6 +573,7 @@ const App = {
       if (saveState) saveState.textContent = 'Saved just now';
       this.updateWordCount();
       this.queueStructureRefresh();
+      this.refreshFileHashes();
       if (Editor.currentFilePath && Editor.currentFilePath.endsWith('.bib')) this.refreshCitationCache();
       if (autoCompileEnabled) {
         clearTimeout(autoCompileTimer);
@@ -635,6 +646,7 @@ const App = {
           // Reload files
           this.projectFiles = await api.get(`/projects/${this.currentProjectId}/files`);
           this.fileTree.setFiles(this.projectFiles);
+          this.refreshFileHashes();
           // Reload image list
           this.imageFiles = await api.get(`/projects/${this.currentProjectId}/images`);
           Editor.setImageFiles(this.imageFiles);
@@ -745,6 +757,7 @@ const App = {
               await api.del(`/projects/${this.currentProjectId}/files/${this.encodeProjectPath(asset.path)}`);
               this.projectFiles = await api.get(`/projects/${this.currentProjectId}/files`);
               this.fileTree.setFiles(this.projectFiles);
+              this.refreshFileHashes();
               this.notify('Asset deleted', 'success');
               render();
             } catch (err) {
@@ -1082,6 +1095,7 @@ const App = {
           const file = await api.post(`/projects/${this.currentProjectId}/files`, { path: filePath, content: raw + '\n' });
           this.projectFiles.push(file);
           this.fileTree.setFiles(this.projectFiles);
+          this.refreshFileHashes();
         } else {
           const existing = await this.readProjectTextFile(filePath);
           await api.put(`/projects/${this.currentProjectId}/files/${this.encodeProjectPath(filePath)}`, {
@@ -1182,6 +1196,7 @@ const App = {
         });
         this.projectFiles.push(file);
         this.fileTree.setFiles(this.projectFiles);
+        this.refreshFileHashes();
         this.openFile(filePath);
         if (filePath.endsWith('.bib')) this.refreshCitationCache();
         close();
@@ -1203,6 +1218,7 @@ const App = {
       await api.del(`/projects/${this.currentProjectId}/files/${path}`);
       this.projectFiles = this.projectFiles.filter(f => f.path !== path);
       this.fileTree.setFiles(this.projectFiles);
+      this.refreshFileHashes();
 
       if (this.fileTree.selectedPath === path) {
         if (this.projectFiles.length > 0) {
@@ -1275,6 +1291,7 @@ const App = {
 
       this.projectFiles = await api.get(`/projects/${this.currentProjectId}/files`);
       this.fileTree.setFiles(this.projectFiles);
+      this.refreshFileHashes();
     } catch (err) {
       statusEl.innerHTML = `${Icons.xCircle14} Error`;
       statusEl.className = 'compile-status error';
@@ -1440,6 +1457,179 @@ const App = {
       el.style.transition = 'opacity 0.3s';
       setTimeout(() => el.remove(), 300);
     }, 4000);
+  },
+
+  async refreshFileHashes() {
+    if (!this.currentProjectId) return [];
+    try {
+      this.fileHashes = await api.get(`/projects/${this.currentProjectId}/files-with-hashes`);
+      if (this.fileTree) {
+        this.fileTree.setHashes(this.fileHashes);
+        this.fileTree.setDevMode(this.devMode);
+      }
+      this.updateSyncStatus('synced');
+      return this.fileHashes;
+    } catch (err) {
+      this.updateSyncStatus('error');
+      return this.fileHashes || [];
+    }
+  },
+
+  updateSyncStatus(state, detail) {
+    this.syncState = state;
+    const button = document.getElementById('sync-status-btn');
+    if (!button) return;
+    const labels = {
+      synced: 'Synced',
+      local: 'Local changes',
+      conflicts: `Conflicts${this.syncConflicts.length ? ` (${this.syncConflicts.length})` : ''}`,
+      error: 'Sync error',
+    };
+    button.className = `sync-status ${state}`;
+    button.innerHTML = `${Icons.sync16} ${labels[state] || 'Sync'}`;
+    button.title = detail || 'CLI sync status';
+  },
+
+  formatHash(hash) {
+    return hash ? `${hash.slice(0, 12)}...` : 'missing';
+  },
+
+  async showSyncCenter() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay sync-overlay';
+    overlay.innerHTML = `
+      <div class="modal sync-modal" role="dialog" aria-label="CLI sync center">
+        <div class="modal-heading-row">
+          <div>
+            <h2>CLI Sync</h2>
+            <p class="modal-subtitle">Pull, push, sync, hashes, and conflict visibility for local workflows.</p>
+          </div>
+          <button class="btn-icon" type="button" id="sync-close" title="Close sync" aria-label="Close sync">${Icons.x}</button>
+        </div>
+        <div class="sync-status-strip">
+          <span class="${this.syncState}">${this.syncState === 'conflicts' ? 'Conflicts require attention' : this.syncState === 'error' ? 'Sync metadata unavailable' : 'Server inventory ready'}</span>
+          <button class="btn btn-secondary btn-small" type="button" id="sync-refresh">${Icons.clock14} Refresh</button>
+          <button class="btn btn-secondary btn-small" type="button" id="sync-toggle-dev">${this.devMode ? 'Hide hashes' : 'Show hashes'}</button>
+          <button class="btn btn-secondary btn-small" type="button" id="sync-conflicts">${Icons.link16} Conflicts</button>
+        </div>
+        <div class="sync-command-grid">
+          ${['pull', 'push', 'sync'].map((command) => `
+            <div class="sync-command">
+              <span>${command}</span>
+              <code>lighttex ${command} ${this.currentProjectId}</code>
+              <button class="btn btn-secondary btn-small" type="button" data-copy-sync="lighttex ${command} ${this.currentProjectId}">Copy</button>
+            </div>
+          `).join('')}
+        </div>
+        <div class="sync-inventory">
+          <div class="sync-inventory-header">
+            <strong>Server file hashes</strong>
+            <span id="sync-file-count">${this.fileHashes.length} files</span>
+          </div>
+          <div class="sync-file-list" id="sync-file-list">
+            <div class="panel-loading">Loading hashes...</div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    const list = overlay.querySelector('#sync-file-list');
+    const count = overlay.querySelector('#sync-file-count');
+
+    const renderHashes = async () => {
+      list.innerHTML = '<div class="panel-loading">Loading hashes...</div>';
+      const hashes = await this.refreshFileHashes();
+      count.textContent = `${hashes.length} files`;
+      if (hashes.length === 0) {
+        list.innerHTML = `
+          <div class="panel-empty">
+            <strong>No file hashes</strong>
+            <span>Create or upload files to populate the sync inventory.</span>
+          </div>
+        `;
+        return;
+      }
+      list.innerHTML = hashes.map((item) => `
+        <div class="sync-file-row">
+          <span title="${this.escapeHtml(item.path)}">${this.escapeHtml(item.path)}</span>
+          <code title="${this.escapeHtml(item.hash || '')}">${this.escapeHtml(this.formatHash(item.hash))}</code>
+        </div>
+      `).join('');
+    };
+
+    overlay.querySelector('#sync-close').addEventListener('click', close);
+    overlay.querySelector('#sync-refresh').addEventListener('click', renderHashes);
+    overlay.querySelector('#sync-conflicts').addEventListener('click', () => this.showConflictsModal());
+    overlay.querySelector('#sync-toggle-dev').addEventListener('click', () => {
+      this.devMode = !this.devMode;
+      localStorage.setItem('lighttex-dev-mode', String(this.devMode));
+      if (this.fileTree) this.fileTree.setDevMode(this.devMode);
+      overlay.querySelector('#sync-toggle-dev').textContent = this.devMode ? 'Hide hashes' : 'Show hashes';
+      this.notify(this.devMode ? 'File hash tooltips enabled' : 'File hashes hidden', 'info');
+    });
+    overlay.querySelectorAll('[data-copy-sync]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        try {
+          if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+          await navigator.clipboard.writeText(button.dataset.copySync);
+          this.notify('CLI command copied', 'success');
+        } catch {
+          this.notify('Could not copy command automatically', 'error');
+        }
+      });
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    renderHashes();
+  },
+
+  showConflictsModal(conflicts = this.syncConflicts) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay conflicts-overlay';
+    overlay.innerHTML = `
+      <div class="modal conflicts-modal" role="dialog" aria-label="Sync conflicts">
+        <div class="modal-heading-row">
+          <div>
+            <h2>Conflicts</h2>
+            <p class="modal-subtitle">Three-way review for files reported by CLI sync.</p>
+          </div>
+          <button class="btn-icon" type="button" id="conflicts-close" title="Close conflicts" aria-label="Close conflicts">${Icons.x}</button>
+        </div>
+        ${conflicts.length === 0 ? `
+          <div class="panel-empty">
+            <strong>No conflicts reported</strong>
+            <span>Run <code>lighttex sync ${this.currentProjectId}</code> locally. Any reported conflicts will appear here when submitted by the sync API.</span>
+          </div>
+        ` : `
+          <div class="conflict-list">
+            ${conflicts.map((file) => `
+              <article class="conflict-row">
+                <header>
+                  <strong>${this.escapeHtml(file)}</strong>
+                  <span>local / remote / merged</span>
+                </header>
+                <div class="conflict-columns">
+                  <pre>Local changes pending from CLI client.</pre>
+                  <pre>Remote server version changed.</pre>
+                  <pre>Resolve locally, then run lighttex push ${this.currentProjectId}.</pre>
+                </div>
+                <div class="conflict-actions">
+                  <button class="btn btn-secondary btn-small" type="button">Keep mine</button>
+                  <button class="btn btn-secondary btn-small" type="button">Keep theirs</button>
+                  <button class="btn btn-primary btn-small" type="button">Mark merged</button>
+                </div>
+              </article>
+            `).join('')}
+          </div>
+        `}
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#conflicts-close').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   },
 
   getActiveSidebarTab() {
@@ -2079,6 +2269,7 @@ const App = {
       this.notify(`Renamed ${oldPath} → ${newPath}`, 'success');
       this.projectFiles = await api.get(`/projects/${this.currentProjectId}/files`);
       this.fileTree.setFiles(this.projectFiles);
+      this.refreshFileHashes();
       if (Editor.currentFilePath === oldPath) {
         this.openFile(newPath);
       }
@@ -2408,6 +2599,12 @@ const App = {
       { label: 'Open symbols palette', hint: 'Greek, math, environments', run: () => this.showSymbolsPalette() },
       { label: 'Open citation manager', hint: '.bib search and cite insert', run: () => this.showCitationManager() },
       { label: 'Open asset manager', hint: 'Images, PDFs, includegraphics', run: () => this.showAssetManager() },
+      { label: 'Open CLI sync center', hint: 'Hashes, commands, conflicts', run: () => this.showSyncCenter() },
+      { label: this.devMode ? 'Hide file hashes' : 'Show file hashes', hint: 'Dev mode file tree tooltips', run: () => {
+        this.devMode = !this.devMode;
+        localStorage.setItem('lighttex-dev-mode', String(this.devMode));
+        if (this.fileTree) this.fileTree.setDevMode(this.devMode);
+      } },
       { label: 'Show document outline', hint: 'Sections, labels, citations', run: () => document.querySelector('[data-tab="outline"]')?.click() },
       { label: 'Check references', hint: 'Broken refs, labels, citations', run: () => document.querySelector('[data-tab="refs"]')?.click() },
       { label: 'Show TODO list', hint: 'TODO, FIXME, HACK, NOTE', run: () => document.querySelector('[data-tab="todo"]')?.click() },
