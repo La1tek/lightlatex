@@ -2463,82 +2463,168 @@ const App = {
   },
 
   async showHistoryModal() {
-    if (!Editor.currentFilePath) { this.notify('No file open', 'error'); return; }
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
-      <div class="modal" style="max-width:900px">
-        <h2>File History: ${this.escapeHtml(Editor.currentFilePath)}</h2>
-        <div id="history-snapshots" style="margin-bottom:10px">
-          <p style="color:var(--text-secondary)">Loading snapshots...</p>
+      <div class="modal history-modal" role="dialog" aria-label="Project history">
+        <div class="modal-heading-row">
+          <div>
+            <h2>History</h2>
+            <p class="modal-subtitle">Snapshots are created after successful compiles.</p>
+          </div>
+          <button class="btn-icon" type="button" id="history-close" title="Close history" aria-label="Close history">${Icons.x}</button>
         </div>
-        <div id="diff-container" style="height:400px;border:1px solid var(--border-color)"></div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" id="history-close">Close</button>
-          <button class="btn btn-primary" id="history-restore">Restore Selected Version</button>
+        <div class="history-layout">
+          <aside class="history-timeline" id="history-timeline">
+            <div class="panel-loading">Loading snapshots...</div>
+          </aside>
+          <section class="history-detail">
+            <div class="history-detail-toolbar">
+              <label>
+                <span>File</span>
+                <select id="history-file-select"></select>
+              </label>
+              <div class="history-selected" id="history-selected">No snapshot selected</div>
+              <button class="btn btn-primary btn-small" type="button" id="history-restore">Restore file</button>
+            </div>
+            <div class="history-diff" id="diff-container">
+              <div class="panel-empty">
+                <strong>Select a snapshot</strong>
+                <span>Choose a snapshot from the timeline to compare this file with current content.</span>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
-    overlay.querySelector('#history-close').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    const close = () => overlay.remove();
+    overlay.querySelector('#history-close').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
     let selectedSnapshot = null;
-    const filePath = Editor.currentFilePath;
+    const textFiles = this.projectFiles
+      .filter((file) => /\.(tex|bib|sty|cls)$/i.test(file.path))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    const fileSelect = overlay.querySelector('#history-file-select');
+    const timeline = overlay.querySelector('#history-timeline');
+    const selectedLabel = overlay.querySelector('#history-selected');
+    const restoreButton = overlay.querySelector('#history-restore');
+    const preferredFile = Editor.currentFilePath || this.currentProject?.mainFile || textFiles[0]?.path || '';
 
-    // Load snapshots
-    try {
-      const snapshots = await api.get(`/projects/${this.currentProjectId}/history`);
-      const snapshotsEl = document.getElementById('history-snapshots');
-      if (snapshots.length === 0) {
-        snapshotsEl.innerHTML = '<p style="color:var(--text-secondary)">No snapshots. Compile the project to create snapshots.</p>';
-      } else {
-        snapshotsEl.innerHTML = '<label style="color:var(--text-secondary)">Select snapshot: </label>' +
-          '<select id="history-select" style="background:var(--input-bg);color:var(--text-primary);border:1px solid var(--border-color);padding:4px;border-radius:4px">' +
-          snapshots.map(s => `<option value="${s}">${s.replace(/T/, ' ').replace(/-/g, ':').substring(0, 19)}</option>`).join('') +
-          '</select>';
-        document.getElementById('history-select').addEventListener('change', async (e) => {
-          selectedSnapshot = e.target.value;
-          await this.loadDiff(overlay, filePath, selectedSnapshot);
-        });
-        selectedSnapshot = snapshots[0];
-        await this.loadDiff(overlay, filePath, selectedSnapshot);
-      }
-    } catch (err) {
-      document.getElementById('history-snapshots').innerHTML = `<p style="color:var(--error)">Error: ${this.escapeHtml(err.message)}</p>`;
+    if (textFiles.length === 0) {
+      fileSelect.innerHTML = '<option value="">No text files</option>';
+      restoreButton.disabled = true;
+    } else {
+      fileSelect.innerHTML = textFiles.map((file) => `<option value="${this.escapeHtml(file.path)}" ${file.path === preferredFile ? 'selected' : ''}>${this.escapeHtml(file.path)}</option>`).join('');
     }
 
-    overlay.querySelector('#history-restore').addEventListener('click', async () => {
-      if (!selectedSnapshot) return;
+    const loadSelectedDiff = async () => {
+      if (!selectedSnapshot || !fileSelect.value) return;
+      selectedLabel.textContent = this.formatSnapshotLabel(selectedSnapshot);
+      await this.loadDiff(fileSelect.value, selectedSnapshot, overlay.querySelector('#diff-container'));
+    };
+
+    try {
+      const snapshots = await api.get(`/projects/${this.currentProjectId}/history`);
+      if (snapshots.length === 0) {
+        timeline.innerHTML = `
+          <div class="panel-empty">
+            <strong>No snapshots yet</strong>
+            <span>Compile successfully to create the first snapshot.</span>
+          </div>
+        `;
+        restoreButton.disabled = true;
+      } else {
+        timeline.innerHTML = snapshots.map((snapshot, index) => `
+          <button class="history-snapshot ${index === 0 ? 'active' : ''}" type="button" data-snapshot="${this.escapeHtml(snapshot)}">
+            <span>${this.escapeHtml(this.formatSnapshotLabel(snapshot))}</span>
+            <small>${this.escapeHtml(this.snapshotMessage(snapshot, index))}</small>
+          </button>
+        `).join('');
+        timeline.querySelectorAll('[data-snapshot]').forEach((button) => {
+          button.addEventListener('click', async () => {
+            selectedSnapshot = button.dataset.snapshot;
+            timeline.querySelectorAll('[data-snapshot]').forEach((item) => item.classList.remove('active'));
+            button.classList.add('active');
+            await loadSelectedDiff();
+          });
+        });
+        selectedSnapshot = snapshots[0];
+        await loadSelectedDiff();
+      }
+    } catch (err) {
+      timeline.innerHTML = `
+        <div class="panel-empty error">
+          <strong>Could not load snapshots</strong>
+          <span>${this.escapeHtml(err.message || 'Unknown history error')}</span>
+        </div>
+      `;
+      restoreButton.disabled = true;
+    }
+
+    fileSelect.addEventListener('change', loadSelectedDiff);
+    restoreButton.addEventListener('click', async () => {
+      if (!selectedSnapshot || !fileSelect.value) return;
+      const filePath = fileSelect.value;
+      if (!confirm(`Restore "${filePath}" from this snapshot?`)) return;
       try {
         const headers = { 'Authorization': `Bearer ${api.token}` };
-        const res = await fetch(`/api/projects/${this.currentProjectId}/history/${selectedSnapshot}/files/${filePath}`, { headers });
+        const res = await fetch(`/api/projects/${this.currentProjectId}/history/${selectedSnapshot}/files/${this.encodeProjectPath(filePath)}`, { headers });
         if (!res.ok) throw new Error('File is not available in this snapshot');
         const content = await res.text();
-        await api.put(`/projects/${this.currentProjectId}/files/${filePath}`, { content });
-        Editor.setValue(content, { silent: true });
+        await api.put(`/projects/${this.currentProjectId}/files/${this.encodeProjectPath(filePath)}`, { content });
+        if (Editor.currentFilePath === filePath) {
+          Editor.setValue(content, { silent: true });
+        } else {
+          this.openFile(filePath);
+        }
+        if (filePath.endsWith('.bib')) this.refreshCitationCache();
         this.notify('File restored from snapshot', 'success');
-        overlay.remove();
+        close();
       } catch (err) {
         this.notify('Restore failed: ' + err.message, 'error');
       }
     });
   },
 
-  async loadDiff(overlay, filePath, timestamp) {
-    const diffContainer = document.getElementById('diff-container');
+  formatSnapshotLabel(timestamp) {
+    const parsed = this.parseSnapshotDate(timestamp);
+    if (!parsed) return timestamp;
+    return parsed.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  },
+
+  snapshotMessage(timestamp, index) {
+    if (index === 0) return 'Latest successful compile';
+    const parsed = this.parseSnapshotDate(timestamp);
+    return parsed ? `Compile #${index + 1}` : timestamp;
+  },
+
+  parseSnapshotDate(timestamp) {
+    const match = String(timestamp).match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d+)Z$/);
+    if (!match) return null;
+    const date = new Date(`${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  },
+
+  async loadDiff(filePath, timestamp, diffContainer) {
     if (!diffContainer) return;
     try {
       const headers = { 'Authorization': `Bearer ${api.token}` };
       const [oldRes, newContent] = await Promise.all([
-        fetch(`/api/projects/${this.currentProjectId}/history/${timestamp}/files/${filePath}`, { headers }).then(async r => {
+        fetch(`/api/projects/${this.currentProjectId}/history/${timestamp}/files/${this.encodeProjectPath(filePath)}`, { headers }).then(async r => {
           if (!r.ok) throw new Error('This file is not present in the selected snapshot.');
           return r.text();
         }),
-        Editor.getValue(),
+        filePath === Editor.currentFilePath ? Editor.getValue() : this.readProjectTextFile(filePath),
       ]);
 
-      // Create Monaco diff editor
       require(['vs/editor/editor.main'], () => {
         diffContainer.innerHTML = '';
         monaco.editor.createDiffEditor(diffContainer, {

@@ -1310,6 +1310,115 @@ a:hover {
   line-height: 1.5;
 }
 
+.history-modal {
+  width: min(1120px, calc(100vw - 32px));
+  padding: var(--space-16);
+}
+
+.history-layout {
+  min-height: min(640px, 72dvh);
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  overflow: hidden;
+}
+
+.history-timeline {
+  min-width: 0;
+  overflow: auto;
+  border-right: var(--panel-border);
+  background: var(--bg-secondary);
+}
+
+.history-snapshot {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  gap: var(--space-4);
+  padding: var(--space-10) var(--space-12);
+  border: 0;
+  border-left: 2px solid transparent;
+  border-bottom: var(--panel-border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.history-snapshot:hover,
+.history-snapshot.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.history-snapshot.active {
+  border-left-color: var(--accent);
+}
+
+.history-snapshot span {
+  color: currentColor;
+  font-size: var(--text-13);
+  font-weight: 700;
+}
+
+.history-snapshot small {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+}
+
+.history-detail {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--bg-editor);
+}
+
+.history-detail-toolbar {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-10);
+  padding: var(--space-10);
+  border-bottom: var(--panel-border);
+  background: var(--bg-secondary);
+}
+
+.history-detail-toolbar label {
+  display: grid;
+  gap: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.history-detail-toolbar select {
+  height: 34px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-4);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: var(--text-12);
+}
+
+.history-selected {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.history-diff {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
 .template-selector {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2592,6 +2701,21 @@ td {
 
   .citation-row-meta {
     grid-template-columns: 1fr 64px;
+  }
+
+  .history-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(140px, 220px) minmax(420px, 1fr);
+  }
+
+  .history-timeline {
+    border-right: 0;
+    border-bottom: var(--panel-border);
+  }
+
+  .history-detail-toolbar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .compile-panel {
