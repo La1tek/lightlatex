@@ -4,6 +4,8 @@ let previewContainer = null;
 let currentPage = 1;
 let rendering = false;
 let pageElements = [];
+let zoomMode = 'fit-width';
+let zoomScale = 1;
 
 const Preview = {
   init(containerEl) {
@@ -59,11 +61,17 @@ const Preview = {
     for (let i = 1; i <= totalPages; i++) {
       try {
         const page = await pdfDoc.getPage(i);
+        const baseViewport = page.getViewport({ scale: 1 });
         const visibleWidth = previewContainer.clientWidth
           || previewContainer.closest('.preview-pane')?.clientWidth
           || 760;
+        const visibleHeight = previewContainer.clientHeight || 640;
         const containerWidth = Math.max(320, visibleWidth - 40);
-        const scale = Math.min(containerWidth / page.getViewport({ scale: 1 }).width, 2.0);
+        const scale = zoomMode === 'fit-width'
+          ? Math.min(containerWidth / baseViewport.width, 2.0)
+          : zoomMode === 'fit-page'
+            ? Math.min(containerWidth / baseViewport.width, Math.max(0.25, (visibleHeight - 64) / baseViewport.height), 2.0)
+            : zoomScale;
         const viewport = page.getViewport({ scale });
 
         const canvas = pageElements[i - 1].querySelector('canvas');
@@ -115,6 +123,37 @@ const Preview = {
     if (current > 1) {
       this.goToPage(current - 1);
     }
+  },
+
+  async setZoom(modeOrScale) {
+    if (typeof modeOrScale === 'number') {
+      zoomMode = 'manual';
+      zoomScale = Math.min(2.5, Math.max(0.35, modeOrScale));
+    } else {
+      zoomMode = modeOrScale;
+    }
+    await this.renderAllPages();
+  },
+
+  async zoomIn() {
+    const current = zoomMode === 'manual' ? zoomScale : this.getCurrentScale();
+    await this.setZoom(current + 0.15);
+  },
+
+  async zoomOut() {
+    const current = zoomMode === 'manual' ? zoomScale : this.getCurrentScale();
+    await this.setZoom(current - 0.15);
+  },
+
+  getCurrentScale() {
+    const canvas = pageElements[0]?.querySelector('canvas');
+    return canvas ? canvas.width / 595 : zoomScale;
+  },
+
+  getZoomLabel() {
+    if (zoomMode === 'fit-width') return 'Fit';
+    if (zoomMode === 'fit-page') return 'Page';
+    return `${Math.round(this.getCurrentScale() * 100)}%`;
   },
 
   clear() {

@@ -46,6 +46,7 @@ const Editor = {
 
       // Autosave
       editor.onDidChangeModelContent(() => {
+        if (options.onDirty) options.onDirty();
         clearTimeout(autosaveTimer);
         autosaveTimer = setTimeout(() => this.autosave(), 2000);
       });

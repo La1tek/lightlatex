@@ -6,6 +6,9 @@ const App = {
   previewVisible: true,
   imageFiles: [],
   lastCompileErrors: [],
+  compileLog: '',
+  currentProject: null,
+  logsPanelVisible: false,
 
   async init() {
     const theme = localStorage.getItem('theme') || 'light';
@@ -315,6 +318,7 @@ const App = {
             <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
             <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
             <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
+            <button class="btn btn-secondary btn-small" id="settings-btn" title="Project settings">${Icons.settings} Settings</button>
             <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
             <button class="btn btn-primary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
             <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
@@ -359,6 +363,10 @@ const App = {
                 <button class="btn-icon" id="pdf-prev">${Icons.chevronLeft16}</button>
                 <span id="pdf-page-num"></span>
                 <button class="btn-icon" id="pdf-next">${Icons.chevronRight16}</button>
+                <button class="btn btn-secondary btn-tiny" id="pdf-fit-width" type="button">Fit</button>
+                <button class="btn-icon" id="pdf-zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+                <span class="pdf-zoom-label" id="pdf-zoom-label">Fit</span>
+                <button class="btn-icon" id="pdf-zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
               </div>
             </div>
             <div class="preview-container" id="preview-container">
@@ -366,7 +374,20 @@ const App = {
             </div>
           </div>
         </div>
-        <div class="editor-statusbar" id="editor-statusbar"><span id="word-count"></span></div>
+        <div class="compile-panel hidden" id="compile-panel">
+          <div class="compile-panel-header">
+            <div class="compile-panel-title">${Icons.clock14} Compile logs</div>
+            <div class="compile-panel-tabs" role="tablist" aria-label="Compile log views">
+              <button class="active" type="button" data-log-tab="issues">Issues</button>
+              <button type="button" data-log-tab="raw">Raw log</button>
+            </div>
+            <button class="btn-icon" id="compile-panel-close" title="Close logs" aria-label="Close logs">${Icons.x}</button>
+          </div>
+          <div class="compile-panel-body" id="compile-panel-body">
+            <div class="empty-state"><p>No compile run yet.</p></div>
+          </div>
+        </div>
+        <div class="editor-statusbar" id="editor-statusbar"><span id="word-count"></span><span id="save-state">Saved</span></div>
       </div>
     `;
 
@@ -374,6 +395,7 @@ const App = {
     let project;
     try {
       project = await api.get(`/projects/${projectId}`);
+      this.currentProject = project;
       document.getElementById('editor-project-name').textContent = project.name;
     } catch {
       container.innerHTML = `<div class="empty-state"><div class="icon">${Icons.xCircle}</div><p>Project not found</p></div>`;
@@ -437,6 +459,10 @@ const App = {
           this.openFile(this.fileTree.selectedPath);
         }
       },
+      onDirty: () => {
+        const saveState = document.getElementById('save-state');
+        if (saveState) saveState.textContent = 'Unsaved changes';
+      },
       onCompile: () => this.compile(),
     });
 
@@ -458,11 +484,12 @@ const App = {
     // Event handlers
     document.getElementById('compile-btn').addEventListener('click', () => this.compile());
     document.getElementById('compile-status').addEventListener('click', () => {
-      if (this.lastCompileErrors.length > 0) this.showCompileErrorsModal();
+      this.openCompilePanel();
     });
     document.getElementById('download-btn').addEventListener('click', () => this.downloadProject());
     document.getElementById('download-pdf-btn').addEventListener('click', () => this.downloadPdf());
     document.getElementById('toggle-preview-btn').addEventListener('click', () => this.togglePreview());
+    document.getElementById('settings-btn').addEventListener('click', () => this.showProjectSettingsModal());
     document.getElementById('toggle-theme-btn').addEventListener('click', () => this.toggleTheme());
     document.getElementById('editor-logout-btn').addEventListener('click', () => {
       api.clearTokens();
@@ -471,6 +498,17 @@ const App = {
     document.getElementById('new-file-btn').addEventListener('click', () => this.promptNewFile());
     document.getElementById('pdf-prev').addEventListener('click', () => { Preview.prevPage(); this.updatePdfPageInfo(); });
     document.getElementById('pdf-next').addEventListener('click', () => { Preview.nextPage(); this.updatePdfPageInfo(); });
+    document.getElementById('pdf-fit-width').addEventListener('click', async () => { await Preview.setZoom('fit-width'); this.updatePdfPageInfo(); });
+    document.getElementById('pdf-zoom-out').addEventListener('click', async () => { await Preview.zoomOut(); this.updatePdfPageInfo(); });
+    document.getElementById('pdf-zoom-in').addEventListener('click', async () => { await Preview.zoomIn(); this.updatePdfPageInfo(); });
+    document.getElementById('compile-panel-close').addEventListener('click', () => this.closeCompilePanel());
+    document.querySelectorAll('[data-log-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-log-tab]').forEach((tab) => tab.classList.remove('active'));
+        btn.classList.add('active');
+        this.renderCompilePanel(btn.dataset.logTab);
+      });
+    });
 
     // Image upload button
     const uploadImgBtn = document.getElementById('upload-image-btn');
@@ -501,7 +539,10 @@ const App = {
     // Override autosave to trigger autocompile
     const origAutosave = Editor.autosave.bind(Editor);
     Editor.autosave = async () => {
+      const saveState = document.getElementById('save-state');
+      if (saveState) saveState.textContent = 'Saving...';
       await origAutosave();
+      if (saveState) saveState.textContent = 'Saved just now';
       this.updateWordCount();
       if (autoCompileEnabled) {
         clearTimeout(autoCompileTimer);
@@ -546,6 +587,8 @@ const App = {
     nameEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
     });
+
+    this.bindEditorShortcuts();
   },
 
   async uploadImages(fileList) {
@@ -718,6 +761,8 @@ const App = {
       const errors = issues.filter((e) => e.severity !== 'warning');
       const warnings = issues.filter((e) => e.severity === 'warning');
       this.lastCompileErrors = issues;
+      this.compileLog = result.log || '';
+      this.renderCompilePanel('issues');
 
       if (result.success && result.pdfGenerated) {
         if (warnings.length > 0) {
@@ -725,6 +770,7 @@ const App = {
           statusEl.className = 'compile-status warning';
           Editor.setCompileErrors(issues, Editor.currentFilePath);
           this.notify(`Compiled with ${warnings.length} warning(s)`, 'info');
+          this.openCompilePanel();
         } else {
           statusEl.innerHTML = `${Icons.check14} Compiled just now`;
           statusEl.className = 'compile-status success';
@@ -739,9 +785,10 @@ const App = {
           Editor.setCompileErrors(issues, Editor.currentFilePath);
           const msgs = issues.slice(0, 5).map(e => `Line ${e.line}: ${e.message}`).join('\n');
           this.notify('Compilation failed:\n' + msgs, 'error');
-          this.showCompileErrorsModal();
+          this.openCompilePanel();
         } else {
           this.notify('Compilation failed', 'error');
+          this.openCompilePanel();
         }
       }
 
@@ -751,6 +798,9 @@ const App = {
       statusEl.innerHTML = `${Icons.xCircle14} Error`;
       statusEl.className = 'compile-status error';
       this.lastCompileErrors = [{ line: 0, message: err.message, severity: 'error' }];
+      this.compileLog = err.message;
+      this.renderCompilePanel('issues');
+      this.openCompilePanel();
       this.notify('Compilation error: ' + err.message, 'error');
     } finally {
       this.isCompiling = false;
@@ -762,42 +812,54 @@ const App = {
   },
 
   showCompileErrorsModal() {
+    this.openCompilePanel();
+  },
+
+  openCompilePanel() {
+    this.logsPanelVisible = true;
+    const panel = document.getElementById('compile-panel');
+    if (panel) panel.classList.remove('hidden');
+    this.renderCompilePanel(document.querySelector('[data-log-tab].active')?.dataset.logTab || 'issues');
+  },
+
+  closeCompilePanel() {
+    this.logsPanelVisible = false;
+    const panel = document.getElementById('compile-panel');
+    if (panel) panel.classList.add('hidden');
+  },
+
+  renderCompilePanel(tab = 'issues') {
+    const body = document.getElementById('compile-panel-body');
+    if (!body) return;
     const issues = this.lastCompileErrors || [];
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-      <div class="modal compile-log-modal">
-        <h2>Compile logs</h2>
-        ${issues.length === 0 ? `
-          <div class="empty-state">
-            <div class="icon">${Icons.check}</div>
-            <p>No compile issues for the current run.</p>
-          </div>
-        ` : `
-          <div class="log-list">
-            ${issues.map((issue, index) => `
-              <button class="log-row ${issue.severity === 'warning' ? 'warning' : 'error'}" data-index="${index}" type="button">
-                <span class="log-severity">${issue.severity === 'warning' ? 'Warning' : 'Error'}</span>
-                <span class="log-line">Line ${issue.line || 0}</span>
-                <span class="log-message">${this.escapeHtml(issue.message || 'Unknown compile issue')}</span>
-              </button>
-            `).join('')}
-          </div>
-        `}
-        <div class="modal-actions">
-          <button class="btn btn-secondary" id="compile-log-close">Close</button>
-        </div>
+    if (tab === 'raw') {
+      body.innerHTML = this.compileLog
+        ? `<pre class="raw-log">${this.escapeHtml(this.compileLog)}</pre>`
+        : `<div class="empty-state"><p>No raw log for the current run.</p></div>`;
+      return;
+    }
+
+    body.innerHTML = issues.length === 0 ? `
+      <div class="empty-state">
+        <div class="icon">${Icons.check}</div>
+        <p>No compile issues for the current run.</p>
+      </div>
+    ` : `
+      <div class="log-list">
+        ${issues.map((issue, index) => `
+          <button class="log-row ${issue.severity === 'warning' ? 'warning' : 'error'}" data-index="${index}" type="button">
+            <span class="log-severity">${issue.severity === 'warning' ? 'Warning' : 'Error'}</span>
+            <span class="log-line">Line ${issue.line || 0}</span>
+            <span class="log-message">${this.escapeHtml(issue.message || 'Unknown compile issue')}</span>
+          </button>
+        `).join('')}
       </div>
     `;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#compile-log-close').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    overlay.querySelectorAll('.log-row').forEach((row) => {
+    body.querySelectorAll('.log-row').forEach((row) => {
       row.addEventListener('click', () => {
         const issue = issues[parseInt(row.dataset.index, 10)];
         if (issue && issue.line) {
           Editor.revealLine(issue.line);
-          overlay.remove();
         }
       });
     });
@@ -815,12 +877,14 @@ const App = {
   updatePdfPageInfo() {
     const info = document.getElementById('pdf-page-info');
     const num = document.getElementById('pdf-page-num');
+    const zoom = document.getElementById('pdf-zoom-label');
     if (info && num) {
       const total = pdfDoc ? pdfDoc.numPages : 0;
       const current = total > 0 ? currentPage : 0;
       info.textContent = 'PDF Preview';
       num.textContent = total > 0 ? `${current} / ${total}` : '';
     }
+    if (zoom) zoom.textContent = Preview.getZoomLabel();
   },
 
   togglePreview() {
@@ -990,6 +1054,10 @@ const App = {
   },
 
   async renameFile(oldPath, newPath) {
+    if (!newPath) {
+      this.showRenameFileModal(oldPath);
+      return;
+    }
     try {
       await api.put(`/projects/${this.currentProjectId}/files/rename`, { oldPath, newPath });
       this.notify(`Renamed ${oldPath} → ${newPath}`, 'success');
@@ -1001,6 +1069,228 @@ const App = {
     } catch (err) {
       this.notify('Rename failed: ' + err.message, 'error');
     }
+  },
+
+  showRenameFileModal(oldPath) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <h2>Rename File</h2>
+        <form id="rename-file-form">
+          <div class="form-group">
+            <label for="rename-file-path">File path</label>
+            <input id="rename-file-path" type="text" value="${this.escapeHtml(oldPath)}" autocomplete="off" required>
+            <div class="field-error" id="rename-file-error" role="alert"></div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" id="rename-file-cancel">Cancel</button>
+            <button class="btn btn-primary" type="submit">Rename</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    const input = overlay.querySelector('#rename-file-path');
+    const error = overlay.querySelector('#rename-file-error');
+    overlay.querySelector('#rename-file-cancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    overlay.querySelector('#rename-file-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const newPath = input.value.trim();
+      error.textContent = '';
+      if (!newPath) return error.textContent = 'File path is required.';
+      if (newPath === oldPath) return close();
+      if (newPath.startsWith('/') || newPath.split(/[\\/]+/).includes('..')) {
+        error.textContent = 'Use a project-relative path.';
+        return;
+      }
+      if (this.projectFiles.some(f => f.path === newPath)) {
+        error.textContent = 'File already exists.';
+        return;
+      }
+      await this.renameFile(oldPath, newPath);
+      close();
+    });
+    input.focus();
+    input.setSelectionRange(0, input.value.length);
+  },
+
+  showProjectSettingsModal() {
+    const project = this.currentProject || {};
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal settings-modal">
+        <h2>Project Settings</h2>
+        <form id="project-settings-form">
+          <div class="form-grid two-col">
+            <div class="form-group">
+              <label for="settings-name">Name</label>
+              <input id="settings-name" type="text" value="${this.escapeHtml(project.name || '')}" required>
+            </div>
+            <div class="form-group">
+              <label for="settings-compiler">Compiler</label>
+              <select id="settings-compiler">
+                ${['pdflatex', 'xelatex', 'lualatex'].map(c => `<option value="${c}" ${project.compiler === c ? 'selected' : ''}>${c}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="settings-description">Description</label>
+            <textarea id="settings-description" rows="3">${this.escapeHtml(project.description || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label for="settings-main-file">Main file</label>
+            <select id="settings-main-file">
+              ${this.projectFiles.filter(f => f.path.endsWith('.tex')).map(f => `<option value="${this.escapeHtml(f.path)}" ${project.mainFile === f.path ? 'selected' : ''}>${this.escapeHtml(f.path)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="settings-section">
+            <h3>CLI access</h3>
+            <div class="copy-row">
+              <code>lighttex pull ${this.currentProjectId}</code>
+              <button class="btn btn-secondary btn-small" type="button" id="copy-cli-command">Copy</button>
+            </div>
+          </div>
+          <div class="field-error" id="settings-error" role="alert"></div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" id="settings-cancel">Cancel</button>
+            <button class="btn btn-primary" type="submit" id="settings-save">Save settings</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#settings-cancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    overlay.querySelector('#copy-cli-command').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard?.writeText(`lighttex pull ${this.currentProjectId}`);
+        this.notify('CLI command copied', 'success');
+      } catch {
+        this.notify('Could not copy command automatically', 'error');
+      }
+    });
+    overlay.querySelector('#project-settings-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const error = overlay.querySelector('#settings-error');
+      const save = overlay.querySelector('#settings-save');
+      error.textContent = '';
+      save.disabled = true;
+      save.innerHTML = `${Icons.clock14} Saving...`;
+      try {
+        const updated = await api.put(`/projects/${this.currentProjectId}`, {
+          name: overlay.querySelector('#settings-name').value.trim(),
+          description: overlay.querySelector('#settings-description').value.trim(),
+          compiler: overlay.querySelector('#settings-compiler').value,
+          mainFile: overlay.querySelector('#settings-main-file').value,
+        });
+        this.currentProject = updated;
+        document.getElementById('editor-project-name').textContent = updated.name;
+        this.notify('Project settings saved', 'success');
+        close();
+      } catch (err) {
+        error.textContent = err.message;
+      } finally {
+        save.disabled = false;
+        save.innerHTML = 'Save settings';
+      }
+    });
+    overlay.querySelector('#settings-name').focus();
+  },
+
+  bindEditorShortcuts() {
+    if (this.editorShortcutHandler) {
+      document.removeEventListener('keydown', this.editorShortcutHandler);
+    }
+    this.editorShortcutHandler = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        this.showCommandPalette('commands');
+      } else if (e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        this.showCommandPalette('files');
+      } else if (e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        this.showSearchModal();
+      }
+    };
+    document.addEventListener('keydown', this.editorShortcutHandler);
+  },
+
+  showCommandPalette(mode = 'commands') {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay command-palette-overlay';
+    overlay.innerHTML = `
+      <div class="command-palette" role="dialog" aria-label="Command palette">
+        <input id="command-input" type="text" placeholder="${mode === 'files' ? 'Open file...' : 'Run command...'}" autocomplete="off">
+        <div class="command-list" id="command-list"></div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const input = overlay.querySelector('#command-input');
+    const list = overlay.querySelector('#command-list');
+    const close = () => overlay.remove();
+    const commands = [
+      { label: 'Compile project', hint: 'Ctrl+S', run: () => this.compile() },
+      { label: 'Search project', hint: 'Ctrl+Shift+F', run: () => this.showSearchModal() },
+      { label: 'Project settings', hint: 'Compiler, main file', run: () => this.showProjectSettingsModal() },
+      { label: 'Toggle PDF preview', hint: 'Editor / PDF', run: () => this.togglePreview() },
+      { label: 'Open history', hint: 'Snapshots', run: () => this.showHistoryModal() },
+      { label: 'Download PDF', hint: 'output.pdf', run: () => this.downloadPdf() },
+      { label: 'Download project ZIP', hint: '.zip', run: () => this.downloadProject() },
+      { label: 'Toggle theme', hint: document.documentElement.dataset.theme === 'dark' ? 'Light' : 'Dark', run: () => this.toggleTheme() },
+    ];
+    const fileItems = this.projectFiles.map(file => ({
+      label: file.path,
+      hint: 'Open file',
+      run: () => this.openFile(file.path),
+    }));
+    let items = mode === 'files' ? fileItems : commands.concat(fileItems);
+
+    const render = () => {
+      const q = input.value.trim().toLowerCase();
+      const filtered = items.filter(item => item.label.toLowerCase().includes(q) || item.hint.toLowerCase().includes(q)).slice(0, 12);
+      list.innerHTML = filtered.length === 0
+        ? '<div class="command-empty">No matches</div>'
+        : filtered.map((item, index) => `
+          <button class="command-item ${index === 0 ? 'active' : ''}" type="button" data-index="${index}">
+            <span>${this.escapeHtml(item.label)}</span>
+            <small>${this.escapeHtml(item.hint)}</small>
+          </button>
+        `).join('');
+      list.querySelectorAll('.command-item').forEach((button) => {
+        button.addEventListener('click', () => {
+          const item = filtered[parseInt(button.dataset.index, 10)];
+          close();
+          item.run();
+        });
+      });
+      overlay._filteredCommands = filtered;
+    };
+    render();
+    input.addEventListener('input', render);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        close();
+      } else if (e.key === 'Enter') {
+        const item = overlay._filteredCommands?.[0];
+        if (item) {
+          close();
+          item.run();
+        }
+      }
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    input.focus();
   },
 
   async showHistoryModal() {

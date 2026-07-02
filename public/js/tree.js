@@ -4,6 +4,7 @@ class FileTree {
     this.onSelect = options.onSelect || (() => {});
     this.onCreate = options.onCreate || (() => {});
     this.onDelete = options.onDelete || (() => {});
+    this.onRename = options.onRename || (() => {});
     this.projectId = options.projectId || null;
     this.files = [];
     this.selectedPath = null;
@@ -71,6 +72,15 @@ class FileTree {
     }
   }
 
+  escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   renderTree(node, parent, depth) {
     const entries = Object.entries(node.children).sort(([aName, aNode], [bName, bNode]) => {
       if (aNode.file && !bNode.file) return 1;
@@ -90,9 +100,12 @@ class FileTree {
         const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext);
         const icon = this.getFileIcon(name);
 
-        el.innerHTML = `${indent}<span class="icon">${icon}</span><span class="name">${name}</span>
+        const safePath = this.escapeHtml(child.file.path);
+        const safeName = this.escapeHtml(name);
+        el.innerHTML = `${indent}<span class="icon">${icon}</span><span class="name">${safeName}</span>
           <span class="file-actions">
-            <button title="Delete" data-delete="${child.file.path}">${Icons.trash14}</button>
+            <button title="Rename" aria-label="Rename ${safePath}" data-rename="${safePath}">${Icons.settings}</button>
+            <button title="Delete" aria-label="Delete ${safePath}" data-delete="${safePath}">${Icons.trash14}</button>
           </span>`;
 
         // Drag & drop support
@@ -136,13 +149,17 @@ class FileTree {
             this.onDelete(e.target.closest('[data-delete]').dataset.delete);
             return;
           }
+          if (e.target.closest('[data-rename]')) {
+            this.onRename(e.target.closest('[data-rename]').dataset.rename);
+            return;
+          }
           this.selectedPath = child.file.path;
           this.render();
           this.onSelect(child.file.path);
         });
       } else {
         el.classList.add('folder');
-        el.innerHTML = `${indent}<span class="icon">${Icons.folderOpen}</span><span class="name">${name}/</span>`;
+        el.innerHTML = `${indent}<span class="icon">${Icons.folderOpen}</span><span class="name">${this.escapeHtml(name)}/</span>`;
         // Drop on folders
         el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.style.background = 'var(--accent)'; });
         el.addEventListener('dragleave', () => { el.style.background = ''; });

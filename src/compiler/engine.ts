@@ -67,8 +67,9 @@ export async function compileProject(
 
     // Parse log for additional errors
     const logPath = mainPath.replace(/\.tex$/, ".log");
+    let logContent = "";
     if (fs.existsSync(logPath)) {
-      const logContent = await fs.promises.readFile(logPath, "utf-8");
+      logContent = await fs.promises.readFile(logPath, "utf-8");
       parseLatexLog(logContent, errors);
     }
 
@@ -84,6 +85,7 @@ export async function compileProject(
       success: result.success,
       errors: dedupErrors(errors),
       pdfGenerated,
+      log: logContent,
     };
   } finally {
     // Cleanup sandbox
