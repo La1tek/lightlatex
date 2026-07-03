@@ -1,6 +1,7 @@
 const baseUrl = (process.env.LIGHTTEX_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const runId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const email = process.env.LIGHTTEX_SMOKE_EMAIL || `smoke-${runId}@lighttex.local`;
+const collaboratorEmail = process.env.LIGHTTEX_SMOKE_COLLABORATOR_EMAIL || `smoke-collab-${runId}@lighttex.local`;
 const password = process.env.LIGHTTEX_SMOKE_PASSWORD || `Smoke-${runId.slice(0, 8)}!`;
 let accessToken = '';
 
@@ -80,6 +81,40 @@ async function main() {
   const collaborators = await request('GET', `/projects/${project.id}/collaborators`);
   assert(collaborators.owner?.email === email, 'Collaborator owner email mismatch');
   assert(Array.isArray(collaborators.collaborators), 'Collaborators list missing');
+
+  const collaboratorAuth = await request('POST', '/auth/register', {
+    email: collaboratorEmail,
+    password,
+    name: 'Smoke Collaborator',
+  }, '');
+  assert(collaboratorAuth.user?.email === collaboratorEmail, 'Collaborator registration email mismatch');
+
+  const addedCollaborator = await request('POST', `/projects/${project.id}/collaborators`, {
+    email: collaboratorEmail,
+    role: 'viewer',
+  });
+  assert(addedCollaborator.role === 'viewer', 'Collaborator viewer role mismatch');
+
+  const sharedProjects = await request('GET', '/projects', undefined, collaboratorAuth.accessToken);
+  assert(sharedProjects.some((item) => item.id === project.id && item.accessRole === 'viewer'), 'Shared project missing for viewer');
+
+  const sharedDetail = await request('GET', `/projects/${project.id}`, undefined, collaboratorAuth.accessToken);
+  assert(sharedDetail.accessRole === 'viewer', 'Shared project detail role mismatch');
+
+  const updatedCollaborator = await request('PUT', `/projects/${project.id}/collaborators/${addedCollaborator.id}`, {
+    role: 'editor',
+  });
+  assert(updatedCollaborator.role === 'editor', 'Collaborator editor role mismatch');
+
+  const collaboratorFile = await request('POST', `/projects/${project.id}/files`, {
+    path: 'collaborator-note.tex',
+    content: '\\section{Collaborator note}\n',
+  }, collaboratorAuth.accessToken);
+  assert(collaboratorFile.path === 'collaborator-note.tex', 'Collaborator could not create file as editor');
+
+  await request('DELETE', `/projects/${project.id}/collaborators/${addedCollaborator.id}`);
+  const collaboratorsAfterRemove = await request('GET', `/projects/${project.id}/collaborators`);
+  assert(!collaboratorsAfterRemove.collaborators.some((item) => item.id === addedCollaborator.id), 'Collaborator was not removed');
 
   const hashes = await request('GET', `/projects/${project.id}/files-with-hashes`);
   assert(hashes.some((file) => file.path === 'main.tex' && file.hash), 'File hash for main.tex missing');
