@@ -52,15 +52,15 @@ const App = {
   },
 
   canEditProject() {
-    return ['owner', 'editor'].includes(this.projectRole());
+    return LightTeXCore.permissions.canEdit(this.projectRole());
   },
 
   canManageProject() {
-    return this.projectRole() === 'owner';
+    return LightTeXCore.permissions.canManage(this.projectRole());
   },
 
   roleLabel(role = this.projectRole()) {
-    return role === 'owner' ? 'Owner' : role === 'editor' ? 'Editor' : 'Viewer';
+    return LightTeXCore.permissions.roleLabel(role);
   },
 
   ensureCanEdit(action = 'edit this project') {
@@ -343,8 +343,7 @@ const App = {
       { id: 'book', name: 'Book', icon: Icons.templateBook, description: 'Long document structure with chapters.' },
       { id: 'beamer', name: 'Beamer', icon: Icons.templateBeamer, description: 'Presentation slides using Beamer.' },
     ];
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
+    const overlay = LightTeXCore.modal.createOverlay();
     overlay.innerHTML = `
       <div class="modal new-project-modal">
         <div class="modal-heading-row">
@@ -406,6 +405,8 @@ const App = {
     `;
 
     document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    LightTeXCore.modal.bindOverlayClose(overlay, close, '#modal-cancel');
 
     let selectedTemplate = '';
     const nameInput = overlay.querySelector('#new-project-name');
@@ -440,9 +441,6 @@ const App = {
     overlay.querySelectorAll('.template-option').forEach(el => {
       el.addEventListener('click', () => selectTemplate(el.dataset.template));
     });
-
-    overlay.querySelector('#modal-cancel').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
     api.get('/templates').then((templates) => {
       for (const template of templates) {
@@ -1107,12 +1105,7 @@ const App = {
   },
 
   formatAuthors(author) {
-    if (!author) return 'Unknown author';
-    return author
-      .split(/\s+and\s+/i)
-      .slice(0, 3)
-      .map((name) => name.includes(',') ? name.split(',')[0].trim() : name.trim().split(/\s+/).slice(-1)[0])
-      .join(', ') + (author.split(/\s+and\s+/i).length > 3 ? ' et al.' : '');
+    return LightTeXCore.format.formatAuthors(author);
   },
 
   async showCitationManager() {
@@ -1762,12 +1755,7 @@ const App = {
         this.notify('No PDF yet. Compile first.', 'error');
         return;
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'document.pdf';
-      a.click();
-      URL.revokeObjectURL(url);
+      LightTeXCore.dom.downloadBlob(blob, 'document.pdf');
     } catch (err) {
       this.notify('Download failed: ' + err.message, 'error');
     }
@@ -1776,12 +1764,7 @@ const App = {
   async downloadProject() {
     try {
       const blob = await api.download(`/projects/${this.currentProjectId}/download`);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'project.zip';
-      a.click();
-      URL.revokeObjectURL(url);
+      LightTeXCore.dom.downloadBlob(blob, 'project.zip');
     } catch (err) {
       this.notify('Download failed: ' + err.message, 'error');
     }
@@ -1798,15 +1781,7 @@ const App = {
   },
 
   notify(message, type = 'info') {
-    const el = document.createElement('div');
-    el.className = `notification ${type}`;
-    el.textContent = message;
-    document.body.appendChild(el);
-    setTimeout(() => {
-      el.style.opacity = '0';
-      el.style.transition = 'opacity 0.3s';
-      setTimeout(() => el.remove(), 300);
-    }, 4000);
+    LightTeXCore.notify.show(message, type);
   },
 
   async refreshFileHashes() {
@@ -1841,7 +1816,7 @@ const App = {
   },
 
   formatHash(hash) {
-    return hash ? `${hash.slice(0, 12)}...` : 'missing';
+    return LightTeXCore.format.formatHash(hash);
   },
 
   async showSyncCenter() {
@@ -2010,25 +1985,15 @@ const App = {
   },
 
   encodeProjectPath(filePath) {
-    return filePath.split('/').map(encodeURIComponent).join('/');
+    return LightTeXCore.path.encodeProjectPath(filePath);
   },
 
   normalizeProjectPath(filePath) {
-    return (filePath || '').replace(/\\/g, '/').replace(/^\.?\//, '');
+    return LightTeXCore.path.normalizeProjectPath(filePath);
   },
 
   projectPathExists(filePath, filePaths) {
-    const normalized = this.normalizeProjectPath(filePath);
-    if (filePaths.has(normalized)) return true;
-    if (!normalized.includes('/')) {
-      const imagePath = `images/${normalized}`;
-      if (filePaths.has(imagePath)) return true;
-    }
-    const hasExtension = /\.[a-z0-9]+$/i.test(normalized);
-    if (!hasExtension) {
-      return Array.from(filePaths).some((candidate) => candidate === normalized || candidate.startsWith(`${normalized}.`) || candidate.startsWith(`images/${normalized}.`));
-    }
-    return false;
+    return LightTeXCore.path.projectPathExists(filePath, filePaths);
   },
 
   stripLatexComment(line) {
@@ -3362,37 +3327,19 @@ const App = {
   },
 
   formatSnapshotLabel(snapshot) {
-    const timestamp = typeof snapshot === 'string' ? snapshot : snapshot.timestamp;
-    if (typeof snapshot === 'object' && snapshot.name) return snapshot.name;
-    const parsed = this.parseSnapshotDate(timestamp);
-    if (!parsed) return timestamp;
-    return parsed.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return LightTeXCore.format.formatSnapshotLabel(snapshot);
   },
 
   snapshotMessage(snapshot, index) {
-    if (typeof snapshot === 'object' && snapshot.message) return snapshot.message;
-    const timestamp = typeof snapshot === 'string' ? snapshot : snapshot.timestamp;
-    if (typeof snapshot === 'object' && snapshot.type === 'manual') return this.formatSnapshotDate(timestamp);
-    if (index === 0) return 'Latest successful compile';
-    const parsed = this.parseSnapshotDate(timestamp);
-    return parsed ? `Compile #${index + 1}` : timestamp;
+    return LightTeXCore.format.snapshotMessage(snapshot, index);
   },
 
   formatSnapshotDate(timestamp) {
-    const parsed = this.parseSnapshotDate(timestamp);
-    return parsed ? parsed.toLocaleString() : timestamp;
+    return LightTeXCore.format.formatSnapshotDate(timestamp);
   },
 
   parseSnapshotDate(timestamp) {
-    const match = String(timestamp).match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d+)Z$/);
-    if (!match) return null;
-    const date = new Date(`${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`);
-    return Number.isNaN(date.getTime()) ? null : date;
+    return LightTeXCore.format.parseSnapshotDate(timestamp);
   },
 
   async loadDiff(filePath, timestamp, diffContainer) {
@@ -3424,14 +3371,11 @@ const App = {
   },
 
   escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return LightTeXCore.dom.escapeHtml(str);
   },
 
   async showSearchModal() {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
+    const overlay = LightTeXCore.modal.createOverlay();
     overlay.innerHTML = `
       <div class="modal" style="max-width:700px">
         <h2>Search in Project</h2>
@@ -3445,9 +3389,8 @@ const App = {
       </div>
     `;
     document.body.appendChild(overlay);
-    overlay.querySelector('#search-close').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.remove(); });
+    const close = () => overlay.remove();
+    LightTeXCore.modal.bindOverlayClose(overlay, close, '#search-close');
 
     let searchTimer;
     document.getElementById('search-input').addEventListener('input', (e) => {
@@ -3472,7 +3415,7 @@ const App = {
                 const line = parseInt(el.dataset.line);
                 this.openFile(file);
                 setTimeout(() => Editor.revealLine(line), 200);
-                overlay.remove();
+                close();
               });
               el.style.cursor = 'pointer';
               el.style.padding = '4px 8px';
