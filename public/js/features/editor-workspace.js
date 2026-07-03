@@ -25,6 +25,7 @@
           <div class="editor-toolbar-right">
             <button class="sync-status synced" id="sync-status-btn" type="button" title="CLI sync status">${Icons.sync16} Synced</button>
             <button class="btn btn-secondary btn-small" id="settings-btn" title="Project settings">${Icons.settings} Settings</button>
+            <button class="btn-icon" id="global-settings-btn" title="Global settings" aria-label="Global settings">${Icons.settings}</button>
             <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme" aria-label="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
             <button class="btn-icon" id="editor-logout-btn" title="Logout" aria-label="Logout">${Icons.logout16}</button>
           </div>
@@ -251,6 +252,7 @@
     document.getElementById('focus-btn').addEventListener('click', () => app.toggleFocusMode());
     document.getElementById('shortcuts-btn').addEventListener('click', () => app.showShortcutsModal());
     document.getElementById('settings-btn').addEventListener('click', () => app.showProjectSettingsModal());
+    document.getElementById('global-settings-btn').addEventListener('click', () => app.showGlobalSettingsModal());
     document.getElementById('preflight-btn').addEventListener('click', () => app.showPreflightCheck());
     document.getElementById('toggle-theme-btn').addEventListener('click', () => app.toggleTheme());
     document.getElementById('editor-logout-btn').addEventListener('click', () => {

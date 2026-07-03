@@ -192,6 +192,10 @@
     max-height: 56dvh;
   }
 
+  .symbols-body {
+    grid-template-columns: 1fr;
+  }
+
   .asset-grid {
     grid-template-columns: 1fr;
     max-height: 58dvh;

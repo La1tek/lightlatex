@@ -31,12 +31,12 @@ const Editor = {
         language: 'latex',
         theme: document.documentElement.dataset.theme === 'dark' ? 'lighttex-dark' : 'lighttex-light',
         minimap: { enabled: true },
-        fontSize: 14,
+        fontSize: this.getFontSize(),
         fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
         lineHeight: 21,
         lineNumbers: 'on',
         scrollBeyondLastLine: false,
-        wordWrap: 'on',
+        wordWrap: this.getWordWrap(),
         automaticLayout: true,
         tabSize: 2,
         insertSpaces: true,
@@ -345,6 +345,27 @@ const Editor = {
     if (editor) {
       editor.updateOptions({ readOnly: readOnlyMode, domReadOnly: readOnlyMode });
     }
+  },
+
+  getFontSize() {
+    const saved = parseInt(localStorage.getItem('lighttex-editor-font-size') || '14', 10);
+    return Number.isFinite(saved) ? Math.max(11, Math.min(22, saved)) : 14;
+  },
+
+  setFontSize(size) {
+    const nextSize = Math.max(11, Math.min(22, parseInt(size, 10) || 14));
+    localStorage.setItem('lighttex-editor-font-size', String(nextSize));
+    if (editor) editor.updateOptions({ fontSize: nextSize });
+  },
+
+  getWordWrap() {
+    return localStorage.getItem('lighttex-editor-word-wrap') || 'on';
+  },
+
+  setWordWrap(mode) {
+    const nextMode = ['on', 'off', 'wordWrapColumn', 'bounded'].includes(mode) ? mode : 'on';
+    localStorage.setItem('lighttex-editor-word-wrap', nextMode);
+    if (editor) editor.updateOptions({ wordWrap: nextMode });
   },
 
   layout() {

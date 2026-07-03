@@ -3,56 +3,108 @@
 
   const symbolGroups = [
     {
-      id: 'greek',
-      label: 'Greek',
+      id: 'greek-lower',
+      label: 'Greek lower',
       items: [
-        ['alpha', '\\alpha'], ['beta', '\\beta'], ['gamma', '\\gamma'], ['delta', '\\delta'],
-        ['epsilon', '\\epsilon'], ['theta', '\\theta'], ['lambda', '\\lambda'], ['mu', '\\mu'],
-        ['pi', '\\pi'], ['rho', '\\rho'], ['sigma', '\\sigma'], ['phi', '\\phi'],
-        ['omega', '\\omega'], ['Gamma', '\\Gamma'], ['Delta', '\\Delta'], ['Theta', '\\Theta'],
-        ['Lambda', '\\Lambda'], ['Sigma', '\\Sigma'], ['Phi', '\\Phi'], ['Omega', '\\Omega'],
+        { name: 'alpha', value: '\\alpha', preview: 'α' },
+        { name: 'beta', value: '\\beta', preview: 'β' },
+        { name: 'gamma', value: '\\gamma', preview: 'γ' },
+        { name: 'delta', value: '\\delta', preview: 'δ' },
+        { name: 'epsilon', value: '\\epsilon', preview: 'ε' },
+        { name: 'theta', value: '\\theta', preview: 'θ' },
+        { name: 'lambda', value: '\\lambda', preview: 'λ' },
+        { name: 'mu', value: '\\mu', preview: 'μ' },
+        { name: 'pi', value: '\\pi', preview: 'π' },
+        { name: 'rho', value: '\\rho', preview: 'ρ' },
+        { name: 'sigma', value: '\\sigma', preview: 'σ' },
+        { name: 'phi', value: '\\phi', preview: 'φ' },
+        { name: 'omega', value: '\\omega', preview: 'ω' },
+      ],
+    },
+    {
+      id: 'greek-upper',
+      label: 'Greek upper',
+      items: [
+        { name: 'Gamma', value: '\\Gamma', preview: 'Γ' },
+        { name: 'Delta', value: '\\Delta', preview: 'Δ' },
+        { name: 'Theta', value: '\\Theta', preview: 'Θ' },
+        { name: 'Lambda', value: '\\Lambda', preview: 'Λ' },
+        { name: 'Xi', value: '\\Xi', preview: 'Ξ' },
+        { name: 'Pi', value: '\\Pi', preview: 'Π' },
+        { name: 'Sigma', value: '\\Sigma', preview: 'Σ' },
+        { name: 'Phi', value: '\\Phi', preview: 'Φ' },
+        { name: 'Psi', value: '\\Psi', preview: 'Ψ' },
+        { name: 'Omega', value: '\\Omega', preview: 'Ω' },
       ],
     },
     {
       id: 'operators',
       label: 'Operators',
       items: [
-        ['frac', '\\frac{}{}'], ['sqrt', '\\sqrt{}'], ['sum', '\\sum'], ['prod', '\\prod'],
-        ['int', '\\int'], ['lim', '\\lim'], ['infty', '\\infty'], ['partial', '\\partial'],
-        ['nabla', '\\nabla'], ['cdot', '\\cdot'], ['times', '\\times'], ['pm', '\\pm'],
-        ['leq', '\\leq'], ['geq', '\\geq'], ['neq', '\\neq'], ['approx', '\\approx'],
-        ['equiv', '\\equiv'], ['propto', '\\propto'], ['subseteq', '\\subseteq'], ['in', '\\in'],
+        { name: 'frac', value: '\\frac{}{}', preview: 'a/b' },
+        { name: 'sqrt', value: '\\sqrt{}', preview: '√x' },
+        { name: 'sum', value: '\\sum', preview: '∑' },
+        { name: 'prod', value: '\\prod', preview: '∏' },
+        { name: 'int', value: '\\int', preview: '∫' },
+        { name: 'lim', value: '\\lim', preview: 'lim' },
+        { name: 'infty', value: '\\infty', preview: '∞' },
+        { name: 'partial', value: '\\partial', preview: '∂' },
+        { name: 'nabla', value: '\\nabla', preview: '∇' },
+        { name: 'cdot', value: '\\cdot', preview: '·' },
+        { name: 'times', value: '\\times', preview: '×' },
+        { name: 'pm', value: '\\pm', preview: '±' },
+        { name: 'leq', value: '\\leq', preview: '≤' },
+        { name: 'geq', value: '\\geq', preview: '≥' },
+        { name: 'neq', value: '\\neq', preview: '≠' },
+        { name: 'approx', value: '\\approx', preview: '≈' },
+        { name: 'equiv', value: '\\equiv', preview: '≡' },
+        { name: 'propto', value: '\\propto', preview: '∝' },
+        { name: 'subseteq', value: '\\subseteq', preview: '⊆' },
+        { name: 'in', value: '\\in', preview: '∈' },
       ],
     },
     {
       id: 'arrows',
       label: 'Arrows',
       items: [
-        ['to', '\\to'], ['leftarrow', '\\leftarrow'], ['rightarrow', '\\rightarrow'],
-        ['leftrightarrow', '\\leftrightarrow'], ['Leftarrow', '\\Leftarrow'], ['Rightarrow', '\\Rightarrow'],
-        ['Leftrightarrow', '\\Leftrightarrow'], ['mapsto', '\\mapsto'], ['uparrow', '\\uparrow'],
-        ['downarrow', '\\downarrow'],
+        { name: 'to', value: '\\to', preview: '→' },
+        { name: 'leftarrow', value: '\\leftarrow', preview: '←' },
+        { name: 'rightarrow', value: '\\rightarrow', preview: '→' },
+        { name: 'leftrightarrow', value: '\\leftrightarrow', preview: '↔' },
+        { name: 'Leftarrow', value: '\\Leftarrow', preview: '⇐' },
+        { name: 'Rightarrow', value: '\\Rightarrow', preview: '⇒' },
+        { name: 'Leftrightarrow', value: '\\Leftrightarrow', preview: '⇔' },
+        { name: 'mapsto', value: '\\mapsto', preview: '↦' },
+        { name: 'uparrow', value: '\\uparrow', preview: '↑' },
+        { name: 'downarrow', value: '\\downarrow', preview: '↓' },
       ],
     },
     {
       id: 'text',
       label: 'Text',
       items: [
-        ['textbf', '\\textbf{}'], ['textit', '\\textit{}'], ['emph', '\\emph{}'],
-        ['underline', '\\underline{}'], ['texttt', '\\texttt{}'], ['footnote', '\\footnote{}'],
-        ['cite', '\\cite{}'], ['ref', '\\ref{}'], ['label', '\\label{}'], ['url', '\\url{}'],
+        { name: 'textbf', value: '\\textbf{}', preview: 'bold' },
+        { name: 'textit', value: '\\textit{}', preview: 'italic' },
+        { name: 'emph', value: '\\emph{}', preview: 'emphasis' },
+        { name: 'underline', value: '\\underline{}', preview: 'underline' },
+        { name: 'texttt', value: '\\texttt{}', preview: 'monospace' },
+        { name: 'footnote', value: '\\footnote{}', preview: 'footnote' },
+        { name: 'cite', value: '\\cite{}', preview: 'citation' },
+        { name: 'ref', value: '\\ref{}', preview: 'reference' },
+        { name: 'label', value: '\\label{}', preview: 'label' },
+        { name: 'url', value: '\\url{}', preview: 'url' },
       ],
     },
     {
       id: 'environments',
       label: 'Environments',
       items: [
-        ['equation', '\\begin{equation}\n  \n\\end{equation}'],
-        ['align', '\\begin{align}\n  \n\\end{align}'],
-        ['itemize', '\\begin{itemize}\n  \\item \n\\end{itemize}'],
-        ['enumerate', '\\begin{enumerate}\n  \\item \n\\end{enumerate}'],
-        ['figure', '\\begin{figure}[ht]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{images/}\n  \\caption{}\n  \\label{fig:}\n\\end{figure}'],
-        ['table', '\\begin{table}[ht]\n  \\centering\n  \\begin{tabular}{}\n  \n  \\end{tabular}\n  \\caption{}\n  \\label{tab:}\n\\end{table}'],
+        { name: 'equation', value: '\\begin{equation}\n  \n\\end{equation}', preview: 'numbered equation' },
+        { name: 'align', value: '\\begin{align}\n  \n\\end{align}', preview: 'aligned equations' },
+        { name: 'itemize', value: '\\begin{itemize}\n  \\item \n\\end{itemize}', preview: 'bullet list' },
+        { name: 'enumerate', value: '\\begin{enumerate}\n  \\item \n\\end{enumerate}', preview: 'numbered list' },
+        { name: 'figure', value: '\\begin{figure}[ht]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{images/}\n  \\caption{}\n  \\label{fig:}\n\\end{figure}', preview: 'figure block' },
+        { name: 'table', value: '\\begin{table}[ht]\n  \\centering\n  \\begin{tabular}{}\n  \n  \\end{tabular}\n  \\caption{}\n  \\label{tab:}\n\\end{table}', preview: 'table block' },
       ],
     },
   ];
@@ -63,17 +115,25 @@
     overlay.innerHTML = `
       <div class="modal symbols-modal" role="dialog" aria-label="LaTeX symbols">
         <div class="modal-heading-row">
-          <h2>Symbols</h2>
+          <div>
+            <h2>Symbols</h2>
+            <p class="modal-subtitle">Pick a command and preview what will be inserted.</p>
+          </div>
           <button class="btn-icon" type="button" id="symbols-close" title="Close symbols" aria-label="Close symbols">${Icons.x}</button>
         </div>
-        <label class="dashboard-search symbols-search" aria-label="Search symbols">
-          ${Icons.search16}
-          <input id="symbols-search-input" type="search" placeholder="Search commands, symbols, environments..." autocomplete="off">
-        </label>
-        <div class="symbols-tabs" role="tablist" aria-label="Symbol groups">
-          ${symbolGroups.map((group, index) => `<button class="${index === 0 ? 'active' : ''}" type="button" data-symbol-tab="${group.id}">${app.escapeHtml(group.label)}</button>`).join('')}
+        <div class="symbols-toolbar">
+          <label class="dashboard-search symbols-search" aria-label="Search symbols">
+            ${Icons.search16}
+            <input id="symbols-search-input" type="search" placeholder="Search commands, glyphs, environments..." autocomplete="off">
+          </label>
+          <div class="symbols-tabs" role="tablist" aria-label="Symbol groups">
+            ${symbolGroups.map((group, index) => `<button class="${index === 0 ? 'active' : ''}" type="button" data-symbol-tab="${group.id}">${app.escapeHtml(group.label)}</button>`).join('')}
+          </div>
         </div>
-        <div class="symbols-grid" id="symbols-grid"></div>
+        <div class="symbols-body">
+          <div class="symbols-grid" id="symbols-grid"></div>
+          <aside class="symbols-preview" id="symbols-preview" aria-live="polite"></aside>
+        </div>
       </div>
     `;
     document.body.appendChild(overlay);
@@ -81,16 +141,23 @@
     const close = () => overlay.remove();
     const input = overlay.querySelector('#symbols-search-input');
     const grid = overlay.querySelector('#symbols-grid');
+    const preview = overlay.querySelector('#symbols-preview');
     let activeGroup = symbolGroups[0].id;
+    let activeIndex = 0;
+    let visibleItems = [];
 
     const getItems = () => {
       const query = input.value.trim().toLowerCase();
       const group = symbolGroups.find((item) => item.id === activeGroup);
       const source = query
-        ? symbolGroups.flatMap((item) => item.items.map(([name, value]) => ({ group: item.label, name, value })))
-        : group.items.map(([name, value]) => ({ group: group.label, name, value }));
+        ? symbolGroups.flatMap((item) => item.items.map((symbol) => ({ group: item.label, ...symbol })))
+        : group.items.map((symbol) => ({ group: group.label, ...symbol }));
       return source
-        .filter((item) => !query || item.name.toLowerCase().includes(query) || item.value.toLowerCase().includes(query) || item.group.toLowerCase().includes(query))
+        .filter((item) => !query
+          || item.name.toLowerCase().includes(query)
+          || item.value.toLowerCase().includes(query)
+          || item.group.toLowerCase().includes(query)
+          || (item.preview || '').toLowerCase().includes(query))
         .slice(0, 60);
     };
 
@@ -99,24 +166,51 @@
       close();
     };
 
+    const selectItem = (index) => {
+      activeIndex = Math.max(0, Math.min(index, visibleItems.length - 1));
+      grid.querySelectorAll('.symbol-item').forEach((button, buttonIndex) => {
+        button.classList.toggle('active', buttonIndex === activeIndex);
+      });
+      const item = visibleItems[activeIndex];
+      if (!item) {
+        preview.innerHTML = '<div class="command-empty">No symbol selected</div>';
+        return;
+      }
+      preview.innerHTML = `
+        <div class="symbol-preview-glyph">${app.escapeHtml(item.preview || item.name)}</div>
+        <div class="symbol-preview-meta">
+          <span>${app.escapeHtml(item.group)}</span>
+          <strong>${app.escapeHtml(item.name)}</strong>
+        </div>
+        <pre>${app.escapeHtml(item.value)}</pre>
+        <button class="btn btn-primary" type="button" id="insert-symbol-preview">${Icons.plus16} Insert</button>
+      `;
+      preview.querySelector('#insert-symbol-preview')?.addEventListener('click', () => insertItem(item));
+    };
+
     const render = () => {
-      const items = getItems();
-      grid.innerHTML = items.length === 0
+      visibleItems = getItems();
+      activeIndex = Math.min(activeIndex, Math.max(0, visibleItems.length - 1));
+      grid.innerHTML = visibleItems.length === 0
         ? '<div class="command-empty">No symbols match this search</div>'
-        : items.map((item, index) => `
+        : visibleItems.map((item, index) => `
           <button class="symbol-item ${index === 0 ? 'active' : ''}" type="button" data-index="${index}">
+            <span class="symbol-glyph">${app.escapeHtml(item.preview || item.name)}</span>
             <code>${app.escapeHtml(item.value)}</code>
             <span>${app.escapeHtml(item.name)}</span>
             <small>${app.escapeHtml(item.group)}</small>
           </button>
         `).join('');
       grid.querySelectorAll('.symbol-item').forEach((button) => {
+        button.addEventListener('mouseenter', () => selectItem(parseInt(button.dataset.index, 10)));
+        button.addEventListener('focus', () => selectItem(parseInt(button.dataset.index, 10)));
         button.addEventListener('click', () => {
-          const item = items[parseInt(button.dataset.index, 10)];
+          const item = visibleItems[parseInt(button.dataset.index, 10)];
           if (item) insertItem(item);
         });
       });
-      overlay._symbolItems = items;
+      selectItem(activeIndex);
+      overlay._symbolItems = visibleItems;
     };
 
     LightTeXCore.modal.bindOverlayClose(overlay, close, '#symbols-close');
@@ -126,16 +220,26 @@
         overlay.querySelectorAll('[data-symbol-tab]').forEach((tab) => tab.classList.remove('active'));
         button.classList.add('active');
         input.value = '';
+        activeIndex = 0;
         render();
       });
     });
-    input.addEventListener('input', render);
+    input.addEventListener('input', () => {
+      activeIndex = 0;
+      render();
+    });
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         close();
       } else if (event.key === 'Enter') {
-        const item = overlay._symbolItems?.[0];
+        const item = overlay._symbolItems?.[activeIndex];
         if (item) insertItem(item);
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        selectItem(activeIndex + 1);
+      } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+        event.preventDefault();
+        selectItem(activeIndex - 1);
       }
     });
     render();
@@ -172,6 +276,7 @@
       { label: 'Check references', hint: 'Broken refs, labels, citations', run: () => document.querySelector('[data-tab="refs"]')?.click() },
       { label: 'Show TODO list', hint: 'TODO, FIXME, HACK, NOTE', run: () => document.querySelector('[data-tab="todo"]')?.click() },
       { label: 'Project settings', hint: 'Compiler, main file', run: () => app.showProjectSettingsModal() },
+      { label: 'Global settings', hint: 'Theme, editor, defaults', run: () => app.showGlobalSettingsModal() },
       { label: 'Toggle PDF preview', hint: 'Editor / PDF', run: () => app.togglePreview() },
       { label: 'Open history', hint: 'Snapshots', run: () => app.showHistoryModal() },
       { label: 'Create named snapshot', hint: 'Manual version checkpoint', run: () => app.showCreateSnapshotModal() },

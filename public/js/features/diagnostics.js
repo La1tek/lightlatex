@@ -251,6 +251,53 @@
     `;
   }
 
+  function buildSectionTree(sections) {
+    const roots = [];
+    const stack = [];
+
+    for (const section of sections) {
+      const node = { item: section, children: [] };
+      const level = Number.isFinite(section.level) ? section.level : 2;
+      while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+        stack.pop();
+      }
+      if (stack.length === 0) {
+        roots.push(node);
+      } else {
+        stack[stack.length - 1].node.children.push(node);
+      }
+      stack.push({ level, node });
+    }
+
+    return roots;
+  }
+
+  function renderSectionNode(app, node) {
+    return `
+      <li class="outline-tree-node">
+        ${renderOutlineItem(app, node.item)}
+        ${node.children.length > 0 ? `
+          <ul class="outline-tree-children">
+            ${node.children.map((child) => renderSectionNode(app, child)).join('')}
+          </ul>
+        ` : ''}
+      </li>
+    `;
+  }
+
+  function renderOutlineTree(app, title, sections) {
+    if (!sections.length) return '';
+    const tree = buildSectionTree(sections);
+    return `
+      <section class="outline-group outline-tree-group">
+        <div class="outline-group-title">${app.escapeHtml(title)}</div>
+        <ul class="outline-tree">
+          ${tree.map((node) => renderSectionNode(app, node)).join('')}
+        </ul>
+      </section>
+    `;
+  }
+
   function renderOutlineItem(app, item, kindLabel) {
     const levelClass = item.level !== undefined ? ` level-${item.level}` : '';
     const activeClass = item.file === Editor.currentFilePath ? ' current-file' : '';
@@ -307,7 +354,7 @@
           <span>${envCount} floats/math</span>
           <span>${citeCount} cites</span>
         </div>
-        ${renderOutlineGroup(app, 'Document Structure', structure.sections)}
+        ${renderOutlineTree(app, 'Document Structure', structure.sections)}
         ${renderOutlineGroup(app, 'Figures, Tables & Equations', structure.environments, 'env')}
         ${renderOutlineGroup(app, 'Labels', structure.labels, 'label')}
         ${renderOutlineGroup(app, 'Citations', uniqueCitations, 'cite')}

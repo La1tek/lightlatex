@@ -9,6 +9,7 @@
         <div class="dashboard-header">
           <h1 class="brand">${Icons.logo} LightTeX</h1>
           <div class="dashboard-header-actions">
+            <button class="btn-icon" id="global-settings-btn" title="Global settings" aria-label="Global settings">${Icons.settings}</button>
             <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme" aria-label="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
             <button class="btn btn-secondary" id="new-project-btn">${Icons.plus16} New project</button>
             <button class="btn-icon" id="logout-btn" title="Logout" aria-label="Logout">${Icons.logout16}</button>
@@ -44,6 +45,7 @@
       </div>
     `;
 
+    document.getElementById('global-settings-btn').addEventListener('click', () => app.showGlobalSettingsModal());
     document.getElementById('toggle-theme-btn').addEventListener('click', () => app.toggleTheme());
     document.getElementById('logout-btn').addEventListener('click', () => {
       app.logout();

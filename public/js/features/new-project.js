@@ -191,6 +191,10 @@
     });
 
     applyPreset(presets[0]);
+    const defaultCompiler = localStorage.getItem('lighttex-default-compiler');
+    if (['pdflatex', 'xelatex', 'lualatex'].includes(defaultCompiler)) {
+      compilerSelect.value = defaultCompiler;
+    }
     nameInput.focus();
     nameInput.select();
   }

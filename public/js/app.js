@@ -265,8 +265,9 @@ const App = {
     document.documentElement.dataset.theme = next;
     localStorage.setItem('theme', next);
     Editor.setTheme(next);
-    const btn = document.querySelector('#toggle-theme-btn');
-    if (btn) btn.innerHTML = next === 'dark' ? Icons.moon16 : Icons.sun16;
+    document.querySelectorAll('#toggle-theme-btn').forEach((btn) => {
+      btn.innerHTML = next === 'dark' ? Icons.moon16 : Icons.sun16;
+    });
   },
 
   notify(message, type = 'info') {
@@ -387,6 +388,10 @@ const App = {
 
   showProjectSettingsModal() {
     return LightTeXFeatures.projectSettings.show(this);
+  },
+
+  showGlobalSettingsModal() {
+    return LightTeXFeatures.globalSettings.show(this);
   },
 
   bindEditorShortcuts() {

@@ -343,6 +343,40 @@ body.resizing-sidebar .sidebar-resizer {
   text-transform: uppercase;
 }
 
+.outline-tree {
+  margin: 0;
+  padding: var(--space-2) 0 var(--space-6);
+  list-style: none;
+}
+
+.outline-tree-node {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline-tree-children {
+  position: relative;
+  margin: 0;
+  padding: 0 0 0 var(--space-14);
+  list-style: none;
+}
+
+.outline-tree-children::before {
+  content: "";
+  position: absolute;
+  left: var(--space-8);
+  top: 0;
+  bottom: var(--space-4);
+  border-left: 1px solid var(--border-color);
+}
+
+.outline-tree-group .outline-item {
+  grid-template-columns: 62px minmax(0, 1fr);
+  min-height: 32px;
+}
+
 .outline-item,
 .todo-item,
 .diagnostic-item {

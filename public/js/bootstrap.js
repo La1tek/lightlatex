@@ -26,6 +26,7 @@ const APP_SCRIPTS = [
   '/js/features/collaboration-center.js',
   '/js/features/history-modal.js',
   '/js/features/command-palette.js',
+  '/js/features/global-settings.js',
   '/js/features/compile-panel.js',
   '/js/features/file-actions.js',
   '/js/features/asset-manager.js',
