@@ -1,0 +1,13 @@
+.editor-statusbar {
+  height: var(--statusbar-height);
+  flex: 0 0 var(--statusbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-12);
+  border-top: var(--panel-border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-12);
+}

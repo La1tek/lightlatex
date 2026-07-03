@@ -1,0 +1,111 @@
+.settings-modal {
+  width: min(720px, 100%);
+}
+
+.form-grid {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.form-grid.two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-section {
+  margin-top: var(--space-16);
+  padding: var(--space-12);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-secondary);
+}
+
+.settings-section h3 {
+  margin-bottom: var(--space-8);
+  color: var(--text-primary);
+  font-size: var(--text-13);
+}
+
+.settings-access-row {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.share-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  gap: var(--space-8);
+  align-items: center;
+}
+
+.share-list {
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-10);
+}
+
+.share-row {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-tertiary);
+}
+
+.share-row.owner {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.share-row span {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.share-row strong,
+.share-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-row strong {
+  color: var(--text-primary);
+  font-size: var(--text-12);
+}
+
+.share-row small {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+}
+
+.panel-empty.compact {
+  min-height: 56px;
+  padding: var(--space-10);
+}
+
+.copy-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.copy-row code {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: var(--space-8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-4);
+  color: var(--text-primary);
+  background: var(--bg-editor);
+}

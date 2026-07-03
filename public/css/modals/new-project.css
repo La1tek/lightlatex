@@ -1,0 +1,78 @@
+.template-selector {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-8);
+  margin-top: var(--space-4);
+}
+
+.new-project-modal {
+  width: min(860px, 100%);
+}
+
+.preset-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.template-selector.gallery {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.preset-card,
+.template-option {
+  min-height: 84px;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: var(--space-6);
+  padding: var(--space-12);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: center;
+  font: inherit;
+  font-size: var(--text-12);
+  font-weight: 600;
+}
+
+.preset-card:hover,
+.template-option:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.preset-card.selected,
+.template-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.preset-card .icon svg,
+.template-option .icon svg,
+.template-option svg {
+  width: 24px;
+  height: 24px;
+}
+
+.preset-card strong,
+.template-option strong {
+  color: var(--text-primary);
+  font-size: var(--text-12);
+}
+
+.preset-card small,
+.template-option small {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.preset-card.selected strong,
+.template-option.selected strong {
+  color: var(--accent);
+}

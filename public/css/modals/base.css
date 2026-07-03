@@ -1,0 +1,60 @@
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-20);
+  background: rgba(15, 23, 42, 0.52);
+  animation: fadeIn var(--duration-modal) var(--ease-enter);
+}
+
+.modal {
+  width: min(520px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  background: var(--bg-elevated);
+  border: var(--panel-border);
+  border-radius: var(--radius-8);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-24);
+  animation: modalIn var(--duration-modal) var(--ease-enter);
+}
+
+.modal h2 {
+  margin-bottom: var(--space-16);
+  color: var(--text-bright);
+  font-size: var(--text-20);
+}
+
+.modal-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-bottom: var(--space-16);
+}
+
+.modal-heading-row h2 {
+  margin-bottom: 0;
+}
+
+.modal-subtitle {
+  margin-top: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.modal-subtitle code {
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  margin-top: var(--space-20);
+}

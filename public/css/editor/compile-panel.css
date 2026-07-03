@@ -1,0 +1,80 @@
+.compile-panel {
+  height: 220px;
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  border-top: var(--panel-border);
+  background: var(--bg-secondary);
+}
+
+.compile-panel.hidden {
+  display: none;
+}
+
+.compile-panel-header {
+  height: 36px;
+  flex: 0 0 36px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-8) 0 var(--space-12);
+  border-bottom: var(--panel-border);
+}
+
+.compile-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  font-weight: 650;
+}
+
+.compile-panel-tabs {
+  display: inline-flex;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  overflow: hidden;
+}
+
+.compile-panel-tabs button {
+  min-height: 26px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-right: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: var(--text-12);
+  cursor: pointer;
+}
+
+.compile-panel-tabs button:last-child {
+  border-right: 0;
+}
+
+.compile-panel-tabs button.active {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.compile-panel-body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-8);
+}
+
+.compile-panel .empty-state {
+  min-height: 120px;
+  padding: var(--space-16);
+}
+
+.raw-log {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  font-family: var(--font-code);
+  font-size: var(--text-12);
+  line-height: 1.5;
+}

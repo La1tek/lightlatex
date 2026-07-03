@@ -1,0 +1,193 @@
+/* Editor workspace */
+.editor-layout {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.editor-toolbar {
+  height: var(--toolbar-height);
+  flex: 0 0 var(--toolbar-height);
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto minmax(420px, 1fr);
+  align-items: center;
+  gap: var(--space-12);
+  padding: 0 var(--space-8);
+  background: var(--bg-secondary);
+  border-bottom: var(--panel-border);
+  z-index: var(--z-sticky);
+}
+
+.editor-toolbar-left,
+.editor-toolbar-center,
+.editor-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.editor-toolbar-center {
+  justify-content: center;
+}
+
+.editor-toolbar-right {
+  justify-content: flex-end;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.editor-toolbar-right::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-toolbar-left .project-name {
+  min-width: 0;
+  max-width: 360px;
+  color: var(--text-bright);
+  font-size: var(--text-14);
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--radius-4);
+  padding: var(--space-4) var(--space-6);
+}
+
+.editor-toolbar-left .project-name:hover,
+.editor-toolbar-left .project-name:focus {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.editor-layout.read-only .editor-toolbar-left .project-name:hover,
+.editor-layout.read-only .editor-toolbar-left .project-name:focus {
+  background: transparent;
+}
+
+.editor-toolbar-left .access-badge {
+  flex: 0 0 auto;
+}
+
+.compile-status {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 0 var(--space-12);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  font-size: var(--text-12);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.compile-status svg {
+  width: 14px;
+  height: 14px;
+}
+
+.compile-status.compiling {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border-color));
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.compile-status.compiling svg {
+  animation: spin 1s linear infinite;
+}
+
+.compile-status.success {
+  border-color: color-mix(in srgb, var(--success) 42%, var(--border-color));
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.compile-status.error {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--border-color));
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+.compile-status.warning {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border-color));
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.sync-status {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 0 var(--space-10);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-12);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sync-status svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sync-status.synced {
+  border-color: color-mix(in srgb, var(--success) 34%, var(--border-color));
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.sync-status.local {
+  border-color: color-mix(in srgb, var(--info) 34%, var(--border-color));
+  color: var(--info);
+  background: var(--info-soft);
+}
+
+.sync-status.conflicts {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border-color));
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.sync-status.error {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--border-color));
+  color: var(--error);
+  background: var(--error-soft);
+}
+
+.editor-main {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(200px, var(--sidebar-width)) minmax(320px, 1fr) minmax(320px, 46vw);
+  overflow: hidden;
+}
+
+.editor-main.editor-only,
+.editor-main.pdf-only {
+  grid-template-columns: minmax(200px, var(--sidebar-width)) minmax(320px, 1fr);
+}
+
+.editor-main.editor-only .preview-pane,
+.editor-main.pdf-only .editor-pane,
+.editor-pane.hidden {
+  display: none;
+}
+
+.editor-layout.focus-mode .sidebar,
+.editor-layout.focus-mode .preview-pane,
+.editor-layout.focus-mode .compile-panel {
+  display: none;
+}
+
+.editor-layout.focus-mode .editor-main {
+  grid-template-columns: minmax(0, 1fr);
+}

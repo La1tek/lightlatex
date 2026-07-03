@@ -1,0 +1,11 @@
+.preflight-modal {
+  width: min(820px, calc(100vw - 32px));
+  padding: var(--space-16);
+}
+
+.preflight-list {
+  max-height: min(520px, 58dvh);
+  overflow: auto;
+  padding: var(--space-6) 0;
+  border-top: var(--panel-border);
+}

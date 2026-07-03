@@ -1,0 +1,12 @@
+.preview-pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: var(--panel-border);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.preview-pane.hidden {
+  display: none;
+}

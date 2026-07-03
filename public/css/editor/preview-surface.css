@@ -1,0 +1,89 @@
+.preview-header {
+  height: 36px;
+  flex: 0 0 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: 0 var(--space-12);
+  border-bottom: var(--panel-border);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  font-weight: 650;
+}
+
+.preview-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.btn-tiny {
+  min-height: 28px;
+  padding: 0 var(--space-8);
+  font-size: var(--text-11);
+}
+
+.pdf-zoom-label {
+  min-width: 44px;
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-11);
+  text-align: center;
+}
+
+.preview-container {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-20);
+  background:
+    linear-gradient(45deg, rgba(148, 163, 184, 0.10) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.10) 25%, transparent 25%),
+    var(--bg-preview);
+  background-size: 24px 24px;
+}
+
+.pdf-page-wrapper {
+  background: #ffffff;
+  border-radius: var(--radius-4);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.pdf-page-canvas {
+  display: block;
+  max-width: 100%;
+}
+
+.pdf-page-label {
+  width: 100%;
+  padding: var(--space-4) 0;
+  border-top: 1px solid #edf2f7;
+  color: #64748b;
+  background: #ffffff;
+  font-family: var(--font-code);
+  font-size: var(--text-11);
+  text-align: center;
+}
+
+.preview-placeholder {
+  min-height: 220px;
+  width: min(420px, 100%);
+  display: grid;
+  place-items: center;
+  padding: var(--space-24);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-8);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  text-align: center;
+}
