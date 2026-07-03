@@ -618,19 +618,15 @@ const App = {
   },
 
   getActiveSidebarTab() {
-    return document.querySelector('.sidebar-tab.active')?.dataset.tab || 'files';
+    return LightTeXFeatures.diagnostics.getActiveSidebarTab(this);
   },
 
   queueStructureRefresh() {
-    clearTimeout(this.structureRefreshTimer);
-    this.structureRefreshTimer = setTimeout(() => this.refreshActiveSidebarPanel(), 700);
+    return LightTeXFeatures.diagnostics.queueStructureRefresh(this);
   },
 
   refreshActiveSidebarPanel() {
-    const tab = this.getActiveSidebarTab();
-    if (tab === 'outline') this.parseOutline();
-    if (tab === 'refs') this.parseReferences();
-    if (tab === 'todo') this.parseTodos();
+    return LightTeXFeatures.diagnostics.refreshActiveSidebarPanel(this);
   },
 
   async readProjectTextFile(filePath) {
@@ -650,565 +646,55 @@ const App = {
   },
 
   stripLatexComment(line) {
-    for (let i = 0; i < line.length; i++) {
-      if (line[i] !== '%') continue;
-      let slashCount = 0;
-      for (let j = i - 1; j >= 0 && line[j] === '\\'; j--) slashCount++;
-      if (slashCount % 2 === 0) return line.slice(0, i);
-    }
-    return line;
+    return LightTeXFeatures.diagnostics.stripLatexComment(line);
   },
 
   readLatexBraceArgument(line, startIndex) {
-    let i = startIndex;
-    while (i < line.length && /\s/.test(line[i])) i++;
-    if (line[i] === '[') {
-      let depth = 0;
-      while (i < line.length) {
-        if (line[i] === '[') depth++;
-        if (line[i] === ']') depth--;
-        i++;
-        if (depth === 0) break;
-      }
-      while (i < line.length && /\s/.test(line[i])) i++;
-    }
-    if (line[i] !== '{') return '';
-    let depth = 0;
-    let value = '';
-    for (; i < line.length; i++) {
-      const char = line[i];
-      const escaped = i > 0 && line[i - 1] === '\\';
-      if (char === '{' && !escaped) {
-        if (depth > 0) value += char;
-        depth++;
-        continue;
-      }
-      if (char === '}' && !escaped) {
-        depth--;
-        if (depth === 0) break;
-      }
-      if (depth > 0) value += char;
-    }
-    return value;
+    return LightTeXFeatures.diagnostics.readLatexBraceArgument(line, startIndex);
   },
 
   cleanLatexText(value) {
-    return (value || '')
-      .replace(/\\(?:textbf|textit|emph|texttt|underline)\s*\{([^}]*)\}/g, '$1')
-      .replace(/\\[a-zA-Z@]+\*?(?:\[[^\]]*\])?/g, '')
-      .replace(/[{}]/g, '')
-      .replace(/~/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    return LightTeXFeatures.diagnostics.cleanLatexText(value);
   },
 
   isStructureFile(filePath) {
-    return /\.(tex|bib|sty|cls)$/i.test(filePath);
+    return LightTeXFeatures.diagnostics.isStructureFile(filePath);
   },
 
   async collectProjectStructure() {
-    const textFiles = this.projectFiles
-      .filter((file) => this.isStructureFile(file.path))
-      .sort((a, b) => a.path.localeCompare(b.path));
-    const sectionLevels = {
-      part: 0,
-      chapter: 1,
-      section: 2,
-      subsection: 3,
-      subsubsection: 4,
-      paragraph: 5,
-      subparagraph: 6,
-    };
-    const structure = {
-      sections: [],
-      labels: [],
-      environments: [],
-      citations: [],
-      refs: [],
-      bibEntries: [],
-      graphics: [],
-      bibliographies: [],
-      todos: [],
-      filesRead: 0,
-    };
-
-    for (const file of textFiles) {
-      let content = '';
-      try {
-        content = await this.readProjectTextFile(file.path);
-        structure.filesRead++;
-      } catch {
-        continue;
-      }
-
-      const lines = content.split('\n');
-      for (let index = 0; index < lines.length; index++) {
-        const rawLine = lines[index];
-        const line = this.stripLatexComment(rawLine);
-        const lineNumber = index + 1;
-
-        if (file.path.endsWith('.bib')) {
-          const bibRegex = /@\w+\s*\{\s*([^,\s]+)\s*,/g;
-          let bibMatch;
-          while ((bibMatch = bibRegex.exec(line)) !== null) {
-            structure.bibEntries.push({
-              type: 'bib',
-              title: bibMatch[1],
-              file: file.path,
-              line: lineNumber,
-            });
-          }
-        }
-
-        const todoMatch = rawLine.match(/%(TODO|FIXME|HACK|NOTE)\s*:?\s*(.*)/i);
-        if (todoMatch) {
-          structure.todos.push({
-            type: todoMatch[1].toUpperCase(),
-            text: todoMatch[2] || '(empty)',
-            file: file.path,
-            line: lineNumber,
-          });
-        }
-
-        const sectionCommandRegex = /\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?/g;
-        let sectionMatch;
-        while ((sectionMatch = sectionCommandRegex.exec(line)) !== null) {
-          const command = sectionMatch[1];
-          const title = this.cleanLatexText(this.readLatexBraceArgument(line, sectionCommandRegex.lastIndex));
-          if (!title) continue;
-          structure.sections.push({
-            type: 'section',
-            command,
-            level: sectionLevels[command],
-            title,
-            file: file.path,
-            line: lineNumber,
-          });
-        }
-
-        const envRegex = /\\begin\{(figure\*?|table\*?|equation\*?|align\*?)\}/g;
-        let envMatch;
-        while ((envMatch = envRegex.exec(line)) !== null) {
-          structure.environments.push({
-            type: 'environment',
-            environment: envMatch[1],
-            title: envMatch[1],
-            file: file.path,
-            line: lineNumber,
-          });
-        }
-
-        const labelRegex = /\\label\s*\{([^}]+)\}/g;
-        let labelMatch;
-        while ((labelMatch = labelRegex.exec(line)) !== null) {
-          structure.labels.push({
-            type: 'label',
-            title: labelMatch[1],
-            file: file.path,
-            line: lineNumber,
-          });
-        }
-
-        const refRegex = /\\(?:ref|eqref|autoref|cref|Cref)\s*\{([^}]+)\}/g;
-        let refMatch;
-        while ((refMatch = refRegex.exec(line)) !== null) {
-          structure.refs.push({
-            type: 'ref',
-            title: refMatch[1],
-            file: file.path,
-            line: lineNumber,
-          });
-        }
-
-        const citeRegex = /\\(?:cite|citep|citet|parencite|textcite|autocite)\w*\s*\{([^}]+)\}/g;
-        let citeMatch;
-        while ((citeMatch = citeRegex.exec(line)) !== null) {
-          citeMatch[1].split(',').map((item) => item.trim()).filter(Boolean).forEach((key) => {
-            structure.citations.push({
-              type: 'citation',
-              title: key,
-              file: file.path,
-              line: lineNumber,
-            });
-          });
-        }
-
-        const graphicsRegex = /\\includegraphics(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
-        let graphicsMatch;
-        while ((graphicsMatch = graphicsRegex.exec(line)) !== null) {
-          structure.graphics.push({
-            type: 'graphic',
-            title: graphicsMatch[1],
-            file: file.path,
-            line: lineNumber,
-          });
-        }
-
-        const addBibRegex = /\\addbibresource(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
-        let addBibMatch;
-        while ((addBibMatch = addBibRegex.exec(line)) !== null) {
-          structure.bibliographies.push({
-            type: 'bibliography',
-            title: addBibMatch[1],
-            file: file.path,
-            line: lineNumber,
-          });
-        }
-
-        const bibliographyRegex = /\\bibliography\s*\{([^}]+)\}/g;
-        let bibliographyMatch;
-        while ((bibliographyMatch = bibliographyRegex.exec(line)) !== null) {
-          bibliographyMatch[1].split(',').map((item) => item.trim()).filter(Boolean).forEach((bibFile) => {
-            structure.bibliographies.push({
-              type: 'bibliography',
-              title: bibFile.endsWith('.bib') ? bibFile : `${bibFile}.bib`,
-              file: file.path,
-              line: lineNumber,
-            });
-          });
-        }
-      }
-    }
-
-    return structure;
+    return LightTeXFeatures.diagnostics.collectProjectStructure(this);
   },
 
   renderOutlineGroup(title, items, kindLabel) {
-    if (!items.length) return '';
-    return `
-      <section class="outline-group">
-        <div class="outline-group-title">${this.escapeHtml(title)}</div>
-        ${items.map((item) => this.renderOutlineItem(item, kindLabel)).join('')}
-      </section>
-    `;
+    return LightTeXFeatures.diagnostics.renderOutlineGroup(this, title, items, kindLabel);
   },
 
   renderOutlineItem(item, kindLabel) {
-    const levelClass = item.level !== undefined ? ` level-${item.level}` : '';
-    const activeClass = item.file === Editor.currentFilePath ? ' current-file' : '';
-    const label = kindLabel || item.command || item.environment || item.type;
-    return `
-      <button class="outline-item${levelClass}${activeClass}" type="button" data-file="${this.escapeHtml(item.file)}" data-line="${item.line}">
-        <span class="outline-item-kind">${this.escapeHtml(label)}</span>
-        <span class="outline-item-main">
-          <span class="outline-item-title">${this.escapeHtml(item.title || '(untitled)')}</span>
-          <span class="outline-item-location">${this.escapeHtml(item.file)}:${item.line}</span>
-        </span>
-      </button>
-    `;
+    return LightTeXFeatures.diagnostics.renderOutlineItem(this, item, kindLabel);
   },
 
   bindStructureNavigation(container) {
-    container.querySelectorAll('[data-file][data-line]').forEach((item) => {
-      item.addEventListener('click', () => {
-        const file = item.dataset.file;
-        const line = parseInt(item.dataset.line, 10);
-        if (!file) return;
-        this.openFile(file);
-        setTimeout(() => Editor.revealLine(line), 200);
-      });
-    });
+    return LightTeXFeatures.diagnostics.bindStructureNavigation(this, container);
   },
 
   async parseOutline() {
-    const outlineEl = document.getElementById('outline-content');
-    if (!outlineEl) return;
-    outlineEl.innerHTML = '<div class="panel-loading">Parsing project structure...</div>';
-    try {
-      const structure = await this.collectProjectStructure();
-      const sectionCount = structure.sections.length;
-      const labelCount = structure.labels.length;
-      const envCount = structure.environments.length;
-      const citeCount = new Set(structure.citations.map((item) => item.title)).size;
-
-      if (sectionCount + labelCount + envCount + citeCount === 0) {
-        outlineEl.innerHTML = `
-          <div class="panel-empty">
-            <strong>No outline yet</strong>
-            <span>Add \\section{}, \\label{}, figures, tables, or citations to build project navigation.</span>
-          </div>
-        `;
-        return;
-      }
-
-      const uniqueCitations = Array.from(new Map(structure.citations.map((item) => [item.title, item])).values());
-      outlineEl.innerHTML = `
-        <div class="outline-summary">
-          <span>${sectionCount} sections</span>
-          <span>${labelCount} labels</span>
-          <span>${envCount} floats/math</span>
-          <span>${citeCount} cites</span>
-        </div>
-        ${this.renderOutlineGroup('Document Structure', structure.sections)}
-        ${this.renderOutlineGroup('Figures, Tables & Equations', structure.environments, 'env')}
-        ${this.renderOutlineGroup('Labels', structure.labels, 'label')}
-        ${this.renderOutlineGroup('Citations', uniqueCitations, 'cite')}
-      `;
-      this.bindStructureNavigation(outlineEl);
-    } catch (err) {
-      outlineEl.innerHTML = `
-        <div class="panel-empty error">
-          <strong>Could not parse outline</strong>
-          <span>${this.escapeHtml(err.message || 'Unknown parser error')}</span>
-        </div>
-      `;
-    }
+    return LightTeXFeatures.diagnostics.parseOutline(this);
   },
 
   async parseReferences() {
-    const refsEl = document.getElementById('refs-content');
-    if (!refsEl) return;
-    refsEl.innerHTML = '<div class="panel-loading">Checking labels, refs, and citations...</div>';
-    try {
-      const structure = await this.collectProjectStructure();
-      const labelsByKey = new Map();
-      const refsByKey = new Map();
-      const bibKeys = new Set(structure.bibEntries.map((item) => item.title));
-
-      structure.labels.forEach((item) => {
-        if (!labelsByKey.has(item.title)) labelsByKey.set(item.title, []);
-        labelsByKey.get(item.title).push(item);
-      });
-      structure.refs.forEach((item) => {
-        if (!refsByKey.has(item.title)) refsByKey.set(item.title, []);
-        refsByKey.get(item.title).push(item);
-      });
-
-      const brokenRefs = structure.refs
-        .filter((item) => !labelsByKey.has(item.title))
-        .map((item) => ({ ...item, kind: 'ref', severity: 'error', message: 'Referenced label was not found' }));
-      const duplicateLabels = Array.from(labelsByKey.entries())
-        .filter(([, items]) => items.length > 1)
-        .flatMap(([key, items]) => items.map((item) => ({ ...item, title: key, kind: 'label', severity: 'warning', message: 'Duplicate label key' })));
-      const unusedLabels = structure.labels
-        .filter((item) => !refsByKey.has(item.title))
-        .map((item) => ({ ...item, kind: 'label', severity: 'info', message: 'Label is not referenced in project' }));
-      const missingCitations = structure.bibEntries.length === 0
-        ? []
-        : structure.citations
-          .filter((item) => !bibKeys.has(item.title))
-          .map((item) => ({ ...item, kind: 'cite', severity: 'warning', message: 'Citation key was not found in .bib files' }));
-
-      const issueCount = brokenRefs.length + duplicateLabels.length + unusedLabels.length + missingCitations.length;
-      refsEl.innerHTML = `
-        <div class="outline-summary diagnostic-summary">
-          <span class="${brokenRefs.length ? 'error' : ''}">${brokenRefs.length} broken refs</span>
-          <span class="${duplicateLabels.length ? 'warning' : ''}">${duplicateLabels.length} duplicate labels</span>
-          <span>${unusedLabels.length} unused labels</span>
-          <span class="${missingCitations.length ? 'warning' : ''}">${missingCitations.length} missing cites</span>
-        </div>
-        ${issueCount === 0 ? `
-          <div class="panel-empty">
-            <strong>References look clean</strong>
-            <span>No broken refs, duplicate labels, unused labels, or missing citation keys detected.</span>
-          </div>
-        ` : `
-          ${this.renderDiagnosticGroup('Broken References', brokenRefs)}
-          ${this.renderDiagnosticGroup('Duplicate Labels', duplicateLabels)}
-          ${this.renderDiagnosticGroup('Unused Labels', unusedLabels)}
-          ${this.renderDiagnosticGroup('Missing Citations', missingCitations)}
-        `}
-      `;
-      this.bindStructureNavigation(refsEl);
-    } catch (err) {
-      refsEl.innerHTML = `
-        <div class="panel-empty error">
-          <strong>Could not check references</strong>
-          <span>${this.escapeHtml(err.message || 'Unknown reference parser error')}</span>
-        </div>
-      `;
-    }
+    return LightTeXFeatures.diagnostics.parseReferences(this);
   },
 
   renderDiagnosticGroup(title, items) {
-    if (!items.length) return '';
-    return `
-      <section class="outline-group">
-        <div class="outline-group-title">${this.escapeHtml(title)}</div>
-        ${items.map((item) => `
-          <button class="diagnostic-item ${this.escapeHtml(item.severity)}" type="button" data-file="${this.escapeHtml(item.file)}" data-line="${item.line}">
-            <span class="diagnostic-kind">${this.escapeHtml(item.kind)}</span>
-            <span class="outline-item-main">
-              <span class="outline-item-title">${this.escapeHtml(item.title || '(empty key)')}</span>
-              <span class="outline-item-location">${this.escapeHtml(item.message)} · ${this.escapeHtml(item.file)}:${item.line}</span>
-            </span>
-          </button>
-        `).join('')}
-      </section>
-    `;
+    return LightTeXFeatures.diagnostics.renderDiagnosticGroup(this, title, items);
   },
 
   async showPreflightCheck() {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-      <div class="modal preflight-modal" role="dialog" aria-label="Preflight check">
-        <div class="modal-heading-row">
-          <div>
-            <h2>Preflight Check</h2>
-            <p class="modal-subtitle">Project checks before compile/export.</p>
-          </div>
-          <button class="btn-icon" type="button" id="preflight-close" title="Close preflight" aria-label="Close preflight">${Icons.x}</button>
-        </div>
-        <div id="preflight-body">
-          <div class="panel-loading">Checking project...</div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    const close = () => overlay.remove();
-    const body = overlay.querySelector('#preflight-body');
-    overlay.querySelector('#preflight-close').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-
-    try {
-      const structure = await this.collectProjectStructure();
-      const filePaths = new Set(this.projectFiles.map((file) => this.normalizeProjectPath(file.path)));
-      const labelKeys = new Set(structure.labels.map((item) => item.title));
-      const refKeys = new Set(structure.refs.map((item) => item.title));
-      const bibKeys = new Set(structure.bibEntries.map((item) => item.title));
-      const labelsByKey = structure.labels.reduce((acc, item) => {
-        if (!acc.has(item.title)) acc.set(item.title, []);
-        acc.get(item.title).push(item);
-        return acc;
-      }, new Map());
-
-      const checks = [];
-      const addCheck = (severity, kind, title, message, file, line) => {
-        checks.push({ severity, kind, title, message, file: file || Editor.currentFilePath || this.currentProject?.mainFile || '', line: line || 1 });
-      };
-
-      const mainFile = this.currentProject?.mainFile;
-      if (!mainFile) {
-        addCheck('warning', 'main', 'No main file configured', 'Set a main .tex file in Project Settings.');
-      } else if (!filePaths.has(this.normalizeProjectPath(mainFile))) {
-        addCheck('error', 'main', mainFile, 'Configured main file is missing from the project.');
-      }
-
-      structure.graphics.forEach((item) => {
-        if (!this.projectPathExists(item.title, filePaths)) {
-          addCheck('error', 'asset', item.title, 'Image/PDF asset referenced by includegraphics was not found.', item.file, item.line);
-        }
-      });
-
-      structure.bibliographies.forEach((item) => {
-        if (!this.projectPathExists(item.title, filePaths)) {
-          addCheck('warning', 'bib', item.title, 'Bibliography file was not found.', item.file, item.line);
-        }
-      });
-
-      structure.refs.forEach((item) => {
-        if (!labelKeys.has(item.title)) {
-          addCheck('error', 'ref', item.title, 'Referenced label was not found.', item.file, item.line);
-        }
-      });
-
-      labelsByKey.forEach((items, key) => {
-        if (items.length > 1) {
-          items.forEach((item) => addCheck('warning', 'label', key, 'Duplicate label key.', item.file, item.line));
-        }
-      });
-
-      structure.labels.forEach((item) => {
-        if (!refKeys.has(item.title)) {
-          addCheck('info', 'label', item.title, 'Label is currently unused.', item.file, item.line);
-        }
-      });
-
-      if (structure.bibEntries.length > 0) {
-        structure.citations.forEach((item) => {
-          if (!bibKeys.has(item.title)) {
-            addCheck('warning', 'cite', item.title, 'Citation key was not found in .bib files.', item.file, item.line);
-          }
-        });
-      }
-
-      const errorCount = checks.filter((item) => item.severity === 'error').length;
-      const warningCount = checks.filter((item) => item.severity === 'warning').length;
-      const infoCount = checks.filter((item) => item.severity === 'info').length;
-      body.innerHTML = `
-        <div class="outline-summary diagnostic-summary">
-          <span class="${errorCount ? 'error' : ''}">${errorCount} errors</span>
-          <span class="${warningCount ? 'warning' : ''}">${warningCount} warnings</span>
-          <span>${infoCount} notes</span>
-        </div>
-        ${checks.length === 0 ? `
-          <div class="panel-empty">
-            <strong>Project is ready</strong>
-            <span>No missing main file, assets, bibliography files, labels, refs, or citations detected.</span>
-          </div>
-        ` : `
-          <div class="preflight-list">
-            ${checks.map((item) => `
-              <button class="diagnostic-item ${this.escapeHtml(item.severity)}" type="button" data-file="${this.escapeHtml(item.file)}" data-line="${item.line}">
-                <span class="diagnostic-kind">${this.escapeHtml(item.kind)}</span>
-                <span class="outline-item-main">
-                  <span class="outline-item-title">${this.escapeHtml(item.title)}</span>
-                  <span class="outline-item-location">${this.escapeHtml(item.message)} · ${this.escapeHtml(item.file)}:${item.line}</span>
-                </span>
-              </button>
-            `).join('')}
-          </div>
-        `}
-      `;
-      this.bindStructureNavigation(body);
-    } catch (err) {
-      body.innerHTML = `
-        <div class="panel-empty error">
-          <strong>Could not run preflight</strong>
-          <span>${this.escapeHtml(err.message || 'Unknown preflight error')}</span>
-        </div>
-      `;
-    }
+    return LightTeXFeatures.diagnostics.showPreflightCheck(this);
   },
 
   async parseTodos() {
-    const todoEl = document.getElementById('todo-content');
-    if (!todoEl) return;
-    todoEl.innerHTML = '<div class="panel-loading">Scanning comments...</div>';
-    try {
-      const structure = await this.collectProjectStructure();
-      const items = structure.todos;
-      if (items.length === 0) {
-        todoEl.innerHTML = `
-          <div class="panel-empty">
-            <strong>No TODOs found</strong>
-            <span>Use comments like % TODO: revise introduction or % FIXME: check equation.</span>
-          </div>
-        `;
-        return;
-      }
-      const counts = items.reduce((acc, item) => {
-        acc[item.type] = (acc[item.type] || 0) + 1;
-        return acc;
-      }, {});
-      todoEl.innerHTML = `
-        <div class="outline-summary">
-          ${Object.keys(counts).sort().map((key) => `<span>${this.escapeHtml(key)} ${counts[key]}</span>`).join('')}
-        </div>
-        <section class="outline-group">
-          <div class="outline-group-title">Comment Tasks</div>
-          ${items.map((item) => `
-            <button class="todo-item ${item.type === 'FIXME' ? 'error' : item.type === 'HACK' ? 'warning' : ''}" type="button" data-file="${this.escapeHtml(item.file)}" data-line="${item.line}">
-              <span class="todo-kind">${this.escapeHtml(item.type)}</span>
-              <span class="outline-item-main">
-                <span class="outline-item-title">${this.escapeHtml(item.text || '(empty)')}</span>
-                <span class="outline-item-location">${this.escapeHtml(item.file)}:${item.line}</span>
-              </span>
-            </button>
-          `).join('')}
-        </section>
-      `;
-      this.bindStructureNavigation(todoEl);
-    } catch (err) {
-      todoEl.innerHTML = `
-        <div class="panel-empty error">
-          <strong>Could not parse TODOs</strong>
-          <span>${this.escapeHtml(err.message || 'Unknown parser error')}</span>
-        </div>
-      `;
-    }
+    return LightTeXFeatures.diagnostics.parseTodos(this);
   },
 
   updateWordCount() {
