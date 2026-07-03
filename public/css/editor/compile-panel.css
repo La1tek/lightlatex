@@ -78,3 +78,118 @@
   font-size: var(--text-12);
   line-height: 1.5;
 }
+
+.compile-jobs-toolbar {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.compile-job-list {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.compile-job-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-10);
+  align-items: center;
+  padding: var(--space-8);
+  border: 1px solid var(--border-color);
+  border-left-width: 3px;
+  border-radius: var(--radius-6);
+  background: var(--bg-tertiary);
+}
+
+.compile-job-row.running,
+.compile-job-row.queued {
+  border-left-color: var(--info);
+}
+
+.compile-job-row.success {
+  border-left-color: var(--success);
+}
+
+.compile-job-row.warning {
+  border-left-color: var(--warning);
+}
+
+.compile-job-row.error,
+.compile-job-row.cancelled {
+  border-left-color: var(--error);
+}
+
+.compile-job-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  align-items: center;
+  color: var(--text-primary);
+  font-size: var(--text-12);
+}
+
+.compile-job-title strong {
+  font-weight: 650;
+}
+
+.compile-job-title span:not(.status-badge) {
+  color: var(--text-secondary);
+}
+
+.compile-job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-top: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-11);
+}
+
+.compile-job-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 var(--space-6);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-11);
+  font-weight: 650;
+  text-transform: capitalize;
+}
+
+.status-badge.running,
+.status-badge.queued {
+  color: var(--info);
+  background: var(--info-soft);
+  border-color: color-mix(in srgb, var(--info) 36%, var(--border-color));
+}
+
+.status-badge.success {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 36%, var(--border-color));
+}
+
+.status-badge.warning {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border-color));
+}
+
+.status-badge.error,
+.status-badge.cancelled {
+  color: var(--error);
+  background: var(--error-soft);
+  border-color: color-mix(in srgb, var(--error) 42%, var(--border-color));
+}

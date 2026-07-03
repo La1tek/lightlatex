@@ -86,6 +86,8 @@
                 <span id="pdf-page-num"></span>
                 <button class="btn-icon" id="pdf-next">${Icons.chevronRight16}</button>
                 <button class="btn btn-secondary btn-tiny" id="pdf-fit-width" type="button">Fit</button>
+                <button class="btn-icon" id="pdf-refresh" title="Refresh PDF" aria-label="Refresh PDF">${Icons.sync16}</button>
+                <button class="btn-icon" id="pdf-copy-link" title="Copy PDF endpoint" aria-label="Copy PDF endpoint">${Icons.link16}</button>
                 <button class="btn-icon" id="pdf-zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
                 <span class="pdf-zoom-label" id="pdf-zoom-label">Fit</span>
                 <button class="btn-icon" id="pdf-zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
@@ -101,6 +103,7 @@
             <div class="compile-panel-title">${Icons.clock14} Compile logs</div>
             <div class="compile-panel-tabs" role="tablist" aria-label="Compile log views">
               <button class="active" type="button" data-log-tab="issues">Issues</button>
+              <button type="button" data-log-tab="jobs">Jobs</button>
               <button type="button" data-log-tab="raw">Raw log</button>
             </div>
             <button class="btn-icon" id="compile-panel-close" title="Close logs" aria-label="Close logs">${Icons.x}</button>
@@ -241,6 +244,15 @@
     document.getElementById('pdf-prev').addEventListener('click', () => { Preview.prevPage(); app.updatePdfPageInfo(); });
     document.getElementById('pdf-next').addEventListener('click', () => { Preview.nextPage(); app.updatePdfPageInfo(); });
     document.getElementById('pdf-fit-width').addEventListener('click', async () => { await Preview.setZoom('fit-width'); app.updatePdfPageInfo(); });
+    document.getElementById('pdf-refresh').addEventListener('click', () => app.loadPdf());
+    document.getElementById('pdf-copy-link').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard?.writeText(`${window.location.origin}/api/projects/${app.currentProjectId}/output.pdf`);
+        app.notify('PDF endpoint copied', 'success');
+      } catch {
+        app.notify('Could not copy PDF endpoint automatically', 'error');
+      }
+    });
     document.getElementById('pdf-zoom-out').addEventListener('click', async () => { await Preview.zoomOut(); app.updatePdfPageInfo(); });
     document.getElementById('pdf-zoom-in').addEventListener('click', async () => { await Preview.zoomIn(); app.updatePdfPageInfo(); });
     document.getElementById('compile-panel-close').addEventListener('click', () => app.closeCompilePanel());

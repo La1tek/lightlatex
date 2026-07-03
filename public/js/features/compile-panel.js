@@ -22,6 +22,7 @@
       }
 
       const result = await api.post(`/projects/${app.currentProjectId}/compile`);
+      app.lastCompileJob = result.job || null;
       const issues = Array.isArray(result.errors) ? result.errors : [];
       const errors = issues.filter((e) => e.severity !== 'warning');
       const warnings = issues.filter((e) => e.severity === 'warning');
@@ -60,6 +61,7 @@
       app.projectFiles = await api.get(`/projects/${app.currentProjectId}/files`);
       app.fileTree.setFiles(app.projectFiles);
       app.refreshFileHashes();
+      refreshCompileJobs(app);
     } catch (err) {
       statusEl.innerHTML = `${Icons.xCircle14} Error`;
       statusEl.className = 'compile-status error';
@@ -94,6 +96,10 @@
     const body = document.getElementById('compile-panel-body');
     if (!body) return;
     const issues = app.lastCompileErrors || [];
+    if (tab === 'jobs') {
+      renderCompileJobs(app, body);
+      return;
+    }
     if (tab === 'raw') {
       body.innerHTML = app.compileLog
         ? `<pre class="raw-log">${app.escapeHtml(app.compileLog)}</pre>`
@@ -125,6 +131,101 @@
         }
       });
     });
+  }
+
+  async function refreshCompileJobs(app) {
+    if (document.querySelector('[data-log-tab].active')?.dataset.logTab === 'jobs') {
+      const body = document.getElementById('compile-panel-body');
+      if (body) await renderCompileJobs(app, body);
+    }
+  }
+
+  function formatDuration(job) {
+    if (!job.durationMs) return job.status === 'running' && job.startedAt
+      ? `${Math.max(1, Math.round((Date.now() - new Date(job.startedAt).getTime()) / 1000))}s`
+      : '—';
+    return job.durationMs < 1000 ? `${job.durationMs}ms` : `${Math.round(job.durationMs / 1000)}s`;
+  }
+
+  function jobStatusLabel(job) {
+    const issueText = `${job.errorCount || 0} errors · ${job.warningCount || 0} warnings`;
+    return `${job.status}${job.message ? ` · ${job.message}` : ''} · ${issueText}`;
+  }
+
+  async function renderCompileJobs(app, body) {
+    body.innerHTML = '<div class="panel-loading">Loading compile jobs...</div>';
+    try {
+      const jobs = await api.get(`/projects/${app.currentProjectId}/compile/jobs`);
+      if (jobs.length === 0) {
+        body.innerHTML = `
+          <div class="empty-state">
+            <div class="icon">${Icons.clock}</div>
+            <p>No compile jobs yet. Run Compile to create the first job.</p>
+          </div>
+        `;
+        return;
+      }
+
+      body.innerHTML = `
+        <div class="compile-jobs-toolbar">
+          <span>${jobs.length} recent job${jobs.length === 1 ? '' : 's'}</span>
+          <button class="btn btn-secondary btn-small" type="button" id="compile-jobs-refresh">${Icons.sync16} Refresh</button>
+        </div>
+        <div class="compile-job-list">
+          ${jobs.map((job) => `
+            <article class="compile-job-row ${job.status}" data-job="${app.escapeHtml(job.id)}">
+              <div>
+                <div class="compile-job-title">
+                  <strong>${app.escapeHtml(job.compiler || 'pdflatex')}</strong>
+                  <span>${app.escapeHtml(job.mainFile || 'main.tex')}</span>
+                  <span class="status-badge ${job.status}">${app.escapeHtml(job.status)}</span>
+                </div>
+                <div class="compile-job-meta">
+                  <span>${new Date(job.createdAt).toLocaleString()}</span>
+                  <span>${formatDuration(job)}</span>
+                  <span>${app.escapeHtml(jobStatusLabel(job))}</span>
+                </div>
+              </div>
+              <div class="compile-job-actions">
+                ${job.status === 'running' || job.status === 'queued' ? `<button class="btn btn-danger btn-small" type="button" data-job-cancel="${app.escapeHtml(job.id)}">Stop</button>` : ''}
+                ${['error', 'warning', 'cancelled'].includes(job.status) ? `<button class="btn btn-secondary btn-small" type="button" data-job-retry="${app.escapeHtml(job.id)}">Retry</button>` : ''}
+              </div>
+            </article>
+          `).join('')}
+        </div>
+      `;
+      body.querySelector('#compile-jobs-refresh')?.addEventListener('click', () => renderCompileJobs(app, body));
+      body.querySelectorAll('[data-job-cancel]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          try {
+            await api.post(`/projects/${app.currentProjectId}/compile/jobs/${button.dataset.jobCancel}/cancel`, {});
+            app.notify('Compile job cancellation requested', 'info');
+            renderCompileJobs(app, body);
+          } catch (err) {
+            app.notify('Could not stop compile job: ' + err.message, 'error');
+          }
+        });
+      });
+      body.querySelectorAll('[data-job-retry]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          try {
+            app.notify('Retrying compile job...', 'info');
+            await api.post(`/projects/${app.currentProjectId}/compile/jobs/${button.dataset.jobRetry}/retry`, {});
+            renderCompileJobs(app, body);
+            app.loadPdf();
+          } catch (err) {
+            app.notify('Retry failed: ' + err.message, 'error');
+          }
+        });
+      });
+    } catch (err) {
+      body.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">${Icons.xCircle}</div>
+          <p>Could not load compile jobs: ${app.escapeHtml(err.message)}</p>
+        </div>
+      `;
+    }
   }
 
   async function loadPdf(app) {

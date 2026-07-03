@@ -10,6 +10,12 @@ let zoomScale = 1;
 const Preview = {
   init(containerEl) {
     previewContainer = containerEl;
+    previewContainer.addEventListener('scroll', () => {
+      if (!pdfDoc) return;
+      currentPage = this.getCurrentVisiblePage();
+      const num = document.getElementById('pdf-page-num');
+      if (num) num.textContent = totalPages > 0 ? `${currentPage} / ${totalPages}` : '';
+    }, { passive: true });
   },
 
   async loadPdf(projectId) {
@@ -164,14 +170,3 @@ const Preview = {
     }
   }
 };
-
-// Scroll sync: detect visible page on scroll
-if (typeof window !== 'undefined') {
-  window.addEventListener('scroll', () => {
-    if (pdfDoc && previewContainer) {
-      currentPage = Preview.getCurrentVisiblePage();
-      const label = document.getElementById('pdf-page-indicator');
-      if (label) label.textContent = `${currentPage} / ${totalPages}`;
-    }
-  }, { passive: true });
-}
