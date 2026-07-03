@@ -1,17 +1,79 @@
 import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
-import { exec, execSync } from "child_process";
+import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 import os from "os";
 import { asc, count, eq } from "drizzle-orm";
 import { db } from "../db";
 import { files, projects, users } from "../db/schema";
 import { HttpError } from "../shared/errors";
+import { config } from "../config";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
-const PROJECTS_DIR = process.env.PROJECTS_DIR || "./data/projects";
+const PROJECTS_DIR = config.projectsDir;
 const COMPILERS = ["pdflatex", "xelatex", "lualatex"];
+
+function commandExists(command: string) {
+  return execFileAsync("which", [command]);
+}
+
+function runCommand(command: string, args: string[], options: { timeout?: number; env?: NodeJS.ProcessEnv } = {}) {
+  return execFileAsync(command, args, {
+    timeout: options.timeout,
+    env: options.env ? { ...process.env, ...options.env } : process.env,
+  });
+}
+
+function runToFile(command: string, args: string[], outputPath: string, options: { timeout?: number; env?: NodeJS.ProcessEnv } = {}) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      env: options.env ? { ...process.env, ...options.env } : process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const out = fsSync.createWriteStream(outputPath);
+    const stderr: Buffer[] = [];
+    const timeout = options.timeout ? setTimeout(() => child.kill("SIGTERM"), options.timeout) : null;
+
+    child.stdout.pipe(out);
+    child.stderr.on("data", (chunk) => stderr.push(Buffer.from(chunk)));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (timeout) clearTimeout(timeout);
+      out.close();
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(Buffer.concat(stderr).toString("utf-8") || `${command} exited with code ${code}`));
+      }
+    });
+  });
+}
+
+function runFromFile(command: string, args: string[], inputPath: string, options: { timeout?: number; env?: NodeJS.ProcessEnv } = {}) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      env: options.env ? { ...process.env, ...options.env } : process.env,
+      stdio: ["pipe", "ignore", "pipe"],
+    });
+    const input = fsSync.createReadStream(inputPath);
+    const stderr: Buffer[] = [];
+    const timeout = options.timeout ? setTimeout(() => child.kill("SIGTERM"), options.timeout) : null;
+
+    input.pipe(child.stdin);
+    child.stderr.on("data", (chunk) => stderr.push(Buffer.from(chunk)));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (timeout) clearTimeout(timeout);
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(Buffer.concat(stderr).toString("utf-8") || `${command} exited with code ${code}`));
+      }
+    });
+  });
+}
 
 export async function isAdmin(userId: string): Promise<boolean> {
   const adminEmail = process.env.ADMIN_EMAIL;
@@ -36,7 +98,7 @@ export async function getAdminStats(userId: string) {
 
   let diskUsage = 0;
   try {
-    const { stdout } = await execAsync(`du -sb ${PROJECTS_DIR} 2>/dev/null`);
+    const { stdout } = await runCommand("du", ["-sb", PROJECTS_DIR]);
     diskUsage = parseInt(stdout.split(/\s/)[0]) || 0;
   } catch {
     // ignore
@@ -45,7 +107,7 @@ export async function getAdminStats(userId: string) {
   let containerStats: any = null;
   try {
     const hostname = os.hostname();
-    const { stdout } = await execAsync(`docker stats --no-stream --format "{{.CPUPerc}} {{.MemUsage}}" ${hostname} 2>/dev/null`);
+    const { stdout } = await runCommand("docker", ["stats", "--no-stream", "--format", "{{.CPUPerc}} {{.MemUsage}}", hostname]);
     const parts = stdout.trim().split(/\s+/);
     if (parts.length >= 2) {
       containerStats = {
@@ -60,12 +122,13 @@ export async function getAdminStats(userId: string) {
   let sysStats: any = null;
   try {
     const [cpuInfo, memInfo] = await Promise.all([
-      execAsync("cat /proc/loadavg 2>/dev/null || echo 'N/A'").catch(() => ({ stdout: "N/A" })),
-      execAsync("free -m 2>/dev/null | head -2 || echo 'N/A'").catch(() => ({ stdout: "N/A" })),
+      fs.readFile("/proc/loadavg", "utf-8").then((stdout) => ({ stdout })).catch(() => ({ stdout: "N/A" })),
+      fs.readFile("/proc/meminfo", "utf-8").then((stdout) => ({ stdout })).catch(() => ({ stdout: "N/A" })),
     ]);
+    const memLines = memInfo.stdout.split("\n");
     sysStats = {
       loadAvg: cpuInfo.stdout.trim().split(/\s+/).slice(0, 3).join(", "),
-      memory: memInfo.stdout.trim().split("\n")[1]?.trim() || "N/A",
+      memory: memLines.slice(0, 3).map((line) => line.trim()).join("; ") || "N/A",
     };
   } catch {
     // ignore
@@ -105,7 +168,7 @@ export async function getAdminHealth(userId: string) {
   const compilerChecks = [];
   for (const compiler of COMPILERS) {
     try {
-      const { stdout } = await execAsync(`command -v ${compiler}`);
+      const { stdout } = await commandExists(compiler);
       compilerChecks.push({ compiler, status: "ok", path: stdout.trim() });
     } catch {
       compilerChecks.push({ compiler, status: "warning", path: "not found in PATH" });
@@ -120,17 +183,17 @@ export async function getAdminHealth(userId: string) {
 
   let diskUsage = 0;
   try {
-    const { stdout } = await execAsync(`du -sb "${PROJECTS_DIR}" 2>/dev/null`);
+    const { stdout } = await runCommand("du", ["-sb", PROJECTS_DIR]);
     diskUsage = parseInt(stdout.split(/\s/)[0]) || 0;
   } catch {
     // ignore
   }
 
   const quotas = {
-    storagePerUserMB: Number(process.env.STORAGE_QUOTA_MB || 0),
-    compileTimeoutMs: Number(process.env.COMPILE_TIMEOUT_MS || 30000),
-    maxUploadMB: Number(process.env.MAX_UPLOAD_MB || 50),
-    maxImageUploadMB: Number(process.env.MAX_IMAGE_UPLOAD_MB || 20),
+    storagePerUserMB: config.quotas.storagePerUserMB,
+    compileTimeoutMs: config.quotas.compileTimeoutMs,
+    maxUploadMB: Math.round(config.upload.maxZipBytes / (1024 * 1024)),
+    maxImageUploadMB: Math.round(config.upload.maxImageBytes / (1024 * 1024)),
   };
 
   return {
@@ -188,16 +251,19 @@ export async function createAdminBackup(userId: string) {
 
   if (dbUrl && dbDump) {
     try {
-      execSync(`pg_dump "${dbUrl}" > ${dbDump}`, { timeout: 30000 });
+      await runToFile("pg_dump", [dbUrl], dbDump, { timeout: 30000 });
     } catch {
       const url = new URL(dbUrl);
-      execSync(`PGPASSWORD=${url.password} pg_dump -h ${url.hostname} -p ${url.port || 5432} -U ${url.username} -d ${url.pathname.slice(1)} > ${dbDump}`, { timeout: 30000 });
+      await runToFile("pg_dump", ["-h", url.hostname, "-p", url.port || "5432", "-U", url.username, "-d", url.pathname.slice(1)], dbDump, {
+        timeout: 30000,
+        env: { PGPASSWORD: url.password },
+      });
     }
   }
 
   const filesToInclude = [PROJECTS_DIR];
   if (dbDump) filesToInclude.push(dbDump);
-  execSync(`tar -czf ${backupFile} ${filesToInclude.join(" ")}`, { timeout: 60000 });
+  await runCommand("tar", ["-czf", backupFile, ...filesToInclude], { timeout: 60000 });
 
   const content = await fs.readFile(backupFile);
   await fs.unlink(backupFile);
@@ -209,21 +275,28 @@ export async function createAdminBackup(userId: string) {
 export async function restoreAdminBackup(userId: string, uploadPath: string) {
   await requireAdmin(userId);
 
-  execSync(`tar -xzf ${uploadPath} -C /tmp/lightlatex-restore/`, { timeout: 60000 });
+  const restoreDir = "/tmp/lightlatex-restore";
+  await fs.rm(restoreDir, { recursive: true, force: true });
+  await fs.mkdir(restoreDir, { recursive: true });
+  await runCommand("tar", ["-xzf", uploadPath, "-C", restoreDir], { timeout: 60000 });
 
-  const restoredProjects = `/tmp/lightlatex-restore/${path.basename(PROJECTS_DIR)}`;
+  const restoredProjects = `${restoreDir}/${path.basename(PROJECTS_DIR)}`;
   try {
-    execSync(`cp -r ${restoredProjects}/* ${PROJECTS_DIR}/`);
+    await fs.mkdir(PROJECTS_DIR, { recursive: true });
+    await fs.cp(restoredProjects, PROJECTS_DIR, { recursive: true, force: true });
   } catch {
     // different dir name
   }
 
-  const dbDump = "/tmp/lightlatex-restore/lightlatex-backup-db.sql";
+  const dbDump = `${restoreDir}/lightlatex-backup-db.sql`;
   try {
     const dbUrl = process.env.DATABASE_URL;
     if (dbUrl) {
       const url = new URL(dbUrl);
-      execSync(`PGPASSWORD=${url.password} psql -h ${url.hostname} -p ${url.port || 5432} -U ${url.username} -d ${url.pathname.slice(1)} < ${dbDump}`);
+      await runFromFile("psql", ["-h", url.hostname, "-p", url.port || "5432", "-U", url.username, "-d", url.pathname.slice(1)], dbDump, {
+        timeout: 60000,
+        env: { PGPASSWORD: url.password },
+      });
     }
   } catch {
     // no DB dump in backup

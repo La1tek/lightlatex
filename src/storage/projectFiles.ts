@@ -76,7 +76,19 @@ export async function removeProjectDir(projectId: string): Promise<void> {
 
 export async function extractZipToProject(projectId: string, zipPath: string): Promise<void> {
   const targetDir = getProjectDir(projectId);
-  await extractZip(zipPath, { dir: targetDir });
+  await extractZip(zipPath, {
+    dir: targetDir,
+    onEntry: (entry) => validateZipEntryPath(entry.fileName),
+  });
+}
+
+export function validateZipEntryPath(filePath: string): void {
+  if (!filePath || path.isAbsolute(filePath)) {
+    throw new Error("Invalid zip entry path");
+  }
+  if (filePath.split(/[\\/]+/).some((segment) => segment === "..")) {
+    throw new Error("Invalid zip entry path");
+  }
 }
 
 export async function zipProject(projectId: string): Promise<Buffer> {

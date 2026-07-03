@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import multer from "multer";
 import fs from "fs/promises";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
+import { config } from "../config";
 import { sendError } from "./http";
 import {
   createAdminBackup,
@@ -59,7 +60,7 @@ router.post("/backup", async (req: AuthRequest, res: Response) => {
   }
 });
 
-const upload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 1024 * 1024 * 1024 } });
+const upload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: config.upload.maxBackupBytes } });
 
 router.post("/restore", upload.single("backup"), async (req: AuthRequest, res: Response) => {
   try {

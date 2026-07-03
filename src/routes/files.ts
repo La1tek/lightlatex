@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import multer from "multer";
 import fs from "fs/promises";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
+import { config } from "../config";
 import { p, pw } from "../utils";
 import { sendError } from "./http";
 import {
@@ -27,8 +28,8 @@ import {
 const router = Router();
 router.use(authMiddleware);
 
-const upload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 50 * 1024 * 1024 } });
-const imageUpload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: config.upload.maxZipBytes } });
+const imageUpload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: config.upload.maxImageBytes } });
 
 router.get("/:id/files", async (req: AuthRequest, res: Response) => {
   try {
