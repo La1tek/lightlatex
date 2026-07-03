@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { ensureDir } from "../storage/fs";
+import { config } from "../config";
 
 const ALLOWED_COMPILERS = new Set(["pdflatex", "xelatex", "lualatex"]);
 const INTERNAL_DIRS = new Set([".snapshots"]);
@@ -16,24 +17,29 @@ const GENERATED_OUTPUTS = new Set([
   "output.fdb_latexmk",
 ]);
 
-interface CompileResult {
+export interface CompileResult {
   success: boolean;
   errors: CompileError[];
   pdfGenerated: boolean;
   log?: string;
 }
 
-interface CompileError {
+export interface CompileError {
   line: number;
   column?: number;
   message: string;
   severity: "error" | "warning";
 }
 
+interface CompileOptions {
+  signal?: AbortSignal;
+}
+
 export async function compileProject(
   projectId: string,
   mainFile: string,
-  compiler: string
+  compiler: string,
+  options: CompileOptions = {},
 ): Promise<CompileResult> {
   const projectsDir = process.env.PROJECTS_DIR || "./data/projects";
   const projectDir = path.join(projectsDir, projectId);
@@ -63,7 +69,7 @@ export async function compileProject(
     // Run compiler
     const errors: CompileError[] = [];
 
-    const result = await runCompiler(compilerBin, sandboxDir, mainFile, errors);
+    const result = await runCompiler(compilerBin, sandboxDir, mainFile, errors, options);
 
     // Parse log for additional errors
     const logPath = mainPath.replace(/\.tex$/, ".log");
@@ -111,11 +117,13 @@ function runCompiler(
   compiler: string,
   cwd: string,
   mainFile: string,
-  errors: CompileError[]
+  errors: CompileError[],
+  options: CompileOptions,
 ): Promise<{ success: boolean }> {
   return new Promise((resolve) => {
     const texliveBin = "/usr/local/texlive/2026/bin/x86_64-linux";
     const envPath = `${texliveBin}:${process.env.PATH}`;
+    let settled = false;
 
     const proc = spawn(compiler, [
       "-interaction=nonstopmode",
@@ -123,7 +131,7 @@ function runCompiler(
       mainFile,
     ], {
       cwd,
-      timeout: 30000,
+      timeout: config.quotas.compileTimeoutMs,
       env: { ...process.env, PATH: envPath },
     });
 
@@ -131,13 +139,28 @@ function runCompiler(
     proc.stderr.on("data", (data) => { stderr += data.toString(); });
 
     const timer = setTimeout(() => {
+      if (settled) return;
       proc.kill("SIGKILL");
-      errors.push({ line: 0, message: "Compilation timed out (30s)", severity: "error" });
+      errors.push({ line: 0, message: `Compilation timed out (${Math.round(config.quotas.compileTimeoutMs / 1000)}s)`, severity: "error" });
+      settled = true;
       resolve({ success: false });
-    }, 35000);
+    }, config.quotas.compileTimeoutMs + 5000);
+
+    const abortHandler = () => {
+      if (settled) return;
+      proc.kill("SIGTERM");
+      errors.push({ line: 0, message: "Compilation cancelled", severity: "error" });
+      settled = true;
+      clearTimeout(timer);
+      resolve({ success: false });
+    };
+    options.signal?.addEventListener("abort", abortHandler, { once: true });
 
     proc.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abortHandler);
       const success = code === 0;
       if (!success && !errors.some(e => e.severity === "error")) {
         errors.push({ line: 0, message: `Compiler exited with code ${code}`, severity: "error" });
@@ -146,7 +169,10 @@ function runCompiler(
     });
 
     proc.on("error", (err) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abortHandler);
       errors.push({ line: 0, message: `Failed to run ${compiler}: ${err.message}`, severity: "error" });
       resolve({ success: false });
     });

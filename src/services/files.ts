@@ -26,6 +26,8 @@ import {
 import { syncFileRecords, upsertFileRecord } from "../storage/fileRegistry";
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/svg+xml", "application/pdf"]);
+const CHECKPOINT_COOLDOWN_MS = 2 * 60 * 1000;
+const checkpointTimes = new Map<string, number>();
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -42,6 +44,19 @@ type UploadedFile = {
   originalname: string;
 };
 
+function scheduleCheckpoint(projectId: string, message: string) {
+  const now = Date.now();
+  const last = checkpointTimes.get(projectId) || 0;
+  if (now - last < CHECKPOINT_COOLDOWN_MS) return;
+  checkpointTimes.set(projectId, now);
+  createSnapshot(projectId, {
+    type: "autosave",
+    message,
+  }).catch(() => {
+    // Checkpoints are best-effort and should never fail file writes.
+  });
+}
+
 export async function listProjectFiles(projectId: string, userId: string) {
   await requireProjectAccess(projectId, userId, "viewer");
   return db.select().from(files).where(eq(files.projectId, projectId));
@@ -52,7 +67,9 @@ export async function createProjectFile(projectId: string, userId: string, input
   if (!input.path) throw new HttpError("File path required", 400);
 
   await writeFile(projectId, input.path, input.content || "");
-  return upsertFileRecord(projectId, input.path);
+  const file = await upsertFileRecord(projectId, input.path);
+  scheduleCheckpoint(projectId, `Created ${input.path}`);
+  return file;
 }
 
 export async function getProjectFile(projectId: string, userId: string, filePath: string) {
@@ -77,6 +94,7 @@ export async function renameProjectFile(projectId: string, userId: string, input
   await renameFile(projectId, oldPath, newPath);
   await db.delete(files).where(and(eq(files.projectId, projectId), eq(files.path, oldPath)));
   await upsertFileRecord(projectId, newPath);
+  scheduleCheckpoint(projectId, `Renamed ${oldPath} to ${newPath}`);
 }
 
 export async function updateProjectFile(projectId: string, userId: string, filePath: string, content: unknown) {
@@ -85,6 +103,7 @@ export async function updateProjectFile(projectId: string, userId: string, fileP
 
   await writeFile(projectId, filePath, String(content));
   await upsertFileRecord(projectId, filePath);
+  scheduleCheckpoint(projectId, `Updated ${filePath}`);
 }
 
 export async function deleteProjectFile(projectId: string, userId: string, filePath: string) {
@@ -92,6 +111,7 @@ export async function deleteProjectFile(projectId: string, userId: string, fileP
   await deleteFile(projectId, filePath);
   await db.delete(files)
     .where(and(eq(files.projectId, projectId), eq(files.path, filePath)));
+  scheduleCheckpoint(projectId, `Deleted ${filePath}`);
 }
 
 export async function importProjectZip(projectId: string, userId: string, uploadPath: string) {

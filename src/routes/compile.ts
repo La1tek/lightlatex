@@ -1,12 +1,17 @@
 import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
-import { compileProject } from "../compiler/engine";
 import { p } from "../utils";
 import fs from "fs";
 import fsPromises from "fs/promises";
-import { createSnapshot } from "../storage/fs";
 import { ProjectAccessError, requireProjectAccess } from "../auth/projectAccess";
 import { sendError } from "./http";
+import {
+  cancelCompileJob,
+  getCompileJob,
+  listCompileJobs,
+  retryCompileJob,
+  runTrackedCompile,
+} from "../services/compileJobs";
 
 const router = Router();
 router.use(authMiddleware);
@@ -16,16 +21,39 @@ const PROJECTS_DIR = process.env.PROJECTS_DIR || "./data/projects";
 router.post("/:id/compile", async (req: AuthRequest, res: Response) => {
   try {
     const id = p(req, "id");
-    const { project } = await requireProjectAccess(id, req.userId!, "editor");
+    res.json(await runTrackedCompile(id, req.userId!));
+  } catch (err: any) {
+    sendError(res, err, 500);
+  }
+});
 
-    const result = await compileProject(project.id, project.mainFile || "main.tex", project.compiler || "pdflatex");
+router.get("/:id/compile/jobs", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await listCompileJobs(p(req, "id"), req.userId!));
+  } catch (err: any) {
+    sendError(res, err, 500);
+  }
+});
 
-    // Create snapshot on compile
-    if (result.success) {
-      try { await createSnapshot(project.id); } catch { /* snapshot best-effort */ }
-    }
+router.get("/:id/compile/jobs/:jobId", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await getCompileJob(p(req, "id"), req.userId!, String(req.params.jobId)));
+  } catch (err: any) {
+    sendError(res, err, 500);
+  }
+});
 
-    res.json(result);
+router.post("/:id/compile/jobs/:jobId/cancel", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await cancelCompileJob(p(req, "id"), req.userId!, String(req.params.jobId)));
+  } catch (err: any) {
+    sendError(res, err, 500);
+  }
+});
+
+router.post("/:id/compile/jobs/:jobId/retry", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await retryCompileJob(p(req, "id"), req.userId!, String(req.params.jobId)));
   } catch (err: any) {
     sendError(res, err, 500);
   }
