@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import multer from "multer";
 import fs from "fs/promises";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
-import { HttpError } from "../shared/errors";
+import { sendError } from "./http";
 import {
   createAdminBackup,
   deleteAdminUser,
@@ -14,15 +14,6 @@ import {
 
 const router = Router();
 router.use(authMiddleware);
-
-function errorStatus(err: any, fallback = 500) {
-  if (err instanceof HttpError) return err.status;
-  return fallback;
-}
-
-function sendError(res: Response, err: any, fallback = 500) {
-  res.status(errorStatus(err, fallback)).json({ error: err.message || "Request failed" });
-}
 
 router.get("/stats", async (req: AuthRequest, res: Response) => {
   try {

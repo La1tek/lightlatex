@@ -1,10 +1,9 @@
 import { Router, Response } from "express";
 import multer from "multer";
 import fs from "fs/promises";
-import { ProjectAccessError } from "../auth/projectAccess";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
-import { HttpError } from "../shared/errors";
 import { p, pw } from "../utils";
+import { sendError } from "./http";
 import {
   createProjectFile,
   createProjectSnapshot,
@@ -27,17 +26,6 @@ import {
 
 const router = Router();
 router.use(authMiddleware);
-
-function errorStatus(err: any, fallback = 400) {
-  if (err instanceof ProjectAccessError) return err.status;
-  if (err instanceof HttpError) return err.status;
-  if (err.message?.includes("not found")) return 404;
-  return fallback;
-}
-
-function sendError(res: Response, err: any, fallback = 400) {
-  res.status(errorStatus(err, fallback)).json({ error: err.message || "Request failed" });
-}
 
 const upload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 50 * 1024 * 1024 } });
 const imageUpload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 20 * 1024 * 1024 } });

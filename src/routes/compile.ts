@@ -6,15 +6,12 @@ import fs from "fs";
 import fsPromises from "fs/promises";
 import { createSnapshot } from "../storage/fs";
 import { ProjectAccessError, requireProjectAccess } from "../auth/projectAccess";
+import { sendError } from "./http";
 
 const router = Router();
 router.use(authMiddleware);
 
 const PROJECTS_DIR = process.env.PROJECTS_DIR || "./data/projects";
-
-function projectStatus(err: any) {
-  return err instanceof ProjectAccessError ? err.status : 500;
-}
 
 router.post("/:id/compile", async (req: AuthRequest, res: Response) => {
   try {
@@ -30,7 +27,7 @@ router.post("/:id/compile", async (req: AuthRequest, res: Response) => {
 
     res.json(result);
   } catch (err: any) {
-    res.status(projectStatus(err)).json({ error: err.message });
+    sendError(res, err, 500);
   }
 });
 

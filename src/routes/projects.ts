@@ -1,7 +1,6 @@
 import { Router, Response } from "express";
 import { authMiddleware, AuthRequest } from "../auth/middleware";
-import { ProjectAccessError } from "../auth/projectAccess";
-import { HttpError } from "../shared/errors";
+import { sendError } from "./http";
 import { p } from "../utils";
 import {
   createProjectForUser,
@@ -20,16 +19,6 @@ import {
 
 const router = Router();
 router.use(authMiddleware);
-
-function errorStatus(err: any, fallback = 400) {
-  if (err instanceof ProjectAccessError) return err.status;
-  if (err instanceof HttpError) return err.status;
-  return fallback;
-}
-
-function sendError(res: Response, err: any, fallback = 400) {
-  res.status(errorStatus(err, fallback)).json({ error: err.message || "Request failed" });
-}
 
 router.get("/", async (req: AuthRequest, res: Response) => {
   try {
