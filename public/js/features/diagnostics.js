@@ -128,7 +128,7 @@
           }
         }
 
-        const todoMatch = rawLine.match(/%(TODO|FIXME|HACK|NOTE)\s*:?\s*(.*)/i);
+        const todoMatch = rawLine.match(/%\s*(TODO|FIXME|HACK|NOTE)\s*:?\s*(.*)/i);
         if (todoMatch) {
           structure.todos.push({
             type: todoMatch[1].toUpperCase(),

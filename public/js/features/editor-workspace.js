@@ -67,11 +67,11 @@
           <div class="editor-pane">
             <div class="editor-actionbar" aria-label="Editor tools">
               <div class="editor-action-primary" aria-label="Editor quick tools">
-                <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
-                <button class="btn btn-secondary btn-small" id="comments-btn" title="Comments">${Icons.comment16} Comments</button>
-                <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} Symbols</button>
-                <button class="btn btn-secondary btn-small" id="citation-manager-btn" title="Citation manager">${Icons.cite16} Cite</button>
-                <button class="btn btn-secondary btn-small" id="asset-manager-btn" title="Asset manager">${Icons.image16} Assets</button>
+                <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} <span>Search</span></button>
+                <button class="btn btn-secondary btn-small" id="comments-btn" title="Comments">${Icons.comment16} <span>Comments</span></button>
+                <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} <span>Symbols</span></button>
+                <button class="btn btn-secondary btn-small" id="citation-manager-btn" title="Citation manager">${Icons.cite16} <span>Cite</span></button>
+                <button class="btn btn-secondary btn-small" id="asset-manager-btn" title="Asset manager" aria-label="Asset manager">${Icons.image16} <span>Assets</span></button>
               </div>
               <div class="editor-action-spacer"></div>
               <div class="editor-more-menu" id="editor-more-menu">

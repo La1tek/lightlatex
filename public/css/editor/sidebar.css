@@ -421,7 +421,7 @@ body.resizing-sidebar .sidebar-resizer {
 .outline-tree-children {
   position: relative;
   margin: 0;
-  padding: 0 0 0 var(--space-14);
+  padding: 0 0 0 var(--space-16);
   list-style: none;
 }
 

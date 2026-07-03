@@ -83,6 +83,7 @@ const Preview = {
       }
     } catch (err) {
       pdfDoc = null;
+      previewContainer.classList.add('empty');
       previewContainer.innerHTML = '<div class="preview-placeholder">No PDF yet. Compile your project (Ctrl+S).</div>';
     }
   },
@@ -91,6 +92,7 @@ const Preview = {
     if (!pdfDoc || !previewContainer) return;
     const generation = ++renderGeneration;
     rendering = true;
+    previewContainer.classList.remove('empty');
 
     const localPageElements = [];
     previewContainer.innerHTML = '';
@@ -326,6 +328,7 @@ const Preview = {
     pdfDoc = null;
     pageElements = [];
     if (previewContainer) {
+      previewContainer.classList.add('empty');
       previewContainer.innerHTML = '<div class="preview-placeholder">No PDF yet. Compile your project (Ctrl+S).</div>';
     }
   }

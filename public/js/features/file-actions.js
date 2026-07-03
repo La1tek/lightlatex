@@ -53,9 +53,9 @@
     previewEl.classList.remove('hidden');
     previewEl.innerHTML = `
       <div class="file-preview-toolbar">
-        <div class="file-preview-title">
+        <div class="file-preview-title" title="${safePath}">
           <span class="file-preview-icon">${isImage ? Icons.fileImage : Icons.filePdf}</span>
-          <span title="${safePath}">${safePath}</span>
+          <span>${isImage ? 'Image preview' : 'PDF asset preview'}</span>
         </div>
         <div class="file-preview-actions">
           <button class="btn btn-secondary btn-small" type="button" data-preview-copy>${Icons.copy14} Copy path</button>
@@ -225,6 +225,26 @@
     localStorage.setItem(recentKey(app), JSON.stringify(recent));
   }
 
+  function removeRecentFile(app, path) {
+    try {
+      const recent = JSON.parse(localStorage.getItem(recentKey(app)) || '[]')
+        .filter((item) => item !== path);
+      localStorage.setItem(recentKey(app), JSON.stringify(recent));
+    } catch {
+      localStorage.setItem(recentKey(app), '[]');
+    }
+  }
+
+  function replaceRecentFile(app, oldPath, newPath) {
+    try {
+      const recent = JSON.parse(localStorage.getItem(recentKey(app)) || '[]')
+        .map((item) => (item === oldPath ? newPath : item));
+      localStorage.setItem(recentKey(app), JSON.stringify(Array.from(new Set(recent))));
+    } catch {
+      // Ignore malformed local recent data.
+    }
+  }
+
   function renderRecentFiles(app) {
     const panel = document.getElementById('recent-files-panel');
     if (!panel || !app.currentProjectId) return;
@@ -256,6 +276,8 @@
       await api.del(`/projects/${app.currentProjectId}/files/${app.encodeProjectPath(path)}`);
       app.projectFiles = app.projectFiles.filter(f => f.path !== path);
       app.fileTree.setFiles(app.projectFiles);
+      removeRecentFile(app, path);
+      renderRecentFiles(app);
       app.refreshFileHashes();
 
       if (app.fileTree.selectedPath === path) {
@@ -348,6 +370,8 @@
       app.notify(`Renamed ${oldPath} → ${newPath}`, 'success');
       app.projectFiles = await api.get(`/projects/${app.currentProjectId}/files`);
       app.fileTree.setFiles(app.projectFiles);
+      replaceRecentFile(app, oldPath, newPath);
+      renderRecentFiles(app);
       app.refreshFileHashes();
       if (Editor.currentFilePath === oldPath) {
         app.openFile(newPath);

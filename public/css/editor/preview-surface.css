@@ -65,6 +65,11 @@
   background-size: 24px 24px;
 }
 
+.preview-container.empty {
+  display: grid;
+  place-items: center;
+}
+
 .pdf-page-wrapper {
   width: max-content;
   margin: 0 auto var(--space-20);
@@ -136,6 +141,7 @@
   width: min(420px, 100%);
   display: grid;
   place-items: center;
+  margin: auto;
   padding: var(--space-24);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-8);

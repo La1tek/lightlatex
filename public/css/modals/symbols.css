@@ -1,17 +1,17 @@
 .symbols-modal {
-  width: min(860px, calc(100vw - 32px));
+  width: min(920px, calc(100vw - 48px));
   max-height: min(760px, calc(100dvh - 48px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: var(--space-14);
+  padding: var(--space-20);
 }
 
 .symbols-toolbar {
   display: grid;
-  gap: var(--space-8);
-  margin-bottom: var(--space-10);
-  padding-bottom: var(--space-10);
+  gap: var(--space-12);
+  margin-bottom: var(--space-12);
+  padding-bottom: var(--space-12);
   border-bottom: var(--panel-border);
 }
 
@@ -44,8 +44,8 @@
   min-height: 0;
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: var(--space-10);
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: var(--space-12);
   overflow: hidden;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .symbol-item {
-  min-height: 70px;
+  min-height: 74px;
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
   align-content: center;
@@ -103,6 +103,8 @@
   font-family: Georgia, "Times New Roman", serif;
   font-size: var(--text-18);
   line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .symbol-item code {
@@ -128,7 +130,7 @@
   max-height: 100%;
   align-self: start;
   display: grid;
-  gap: var(--space-10);
+  gap: var(--space-12);
   padding: var(--space-12);
   border: var(--panel-border);
   border-radius: var(--radius-8);
@@ -137,7 +139,7 @@
 }
 
 .symbol-preview-glyph {
-  min-height: 88px;
+  min-height: 96px;
   display: grid;
   place-items: center;
   border: var(--panel-border);
@@ -145,7 +147,7 @@
   background: var(--bg-secondary);
   color: var(--text-bright);
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(24px, 4vw, 44px);
+  font-size: clamp(24px, 3.5vw, 42px);
   line-height: 1.1;
   text-align: center;
   overflow: hidden;
@@ -172,7 +174,7 @@
   max-height: 112px;
   margin: 0;
   overflow: auto;
-  padding: var(--space-10);
+  padding: var(--space-12);
   border: var(--panel-border);
   border-radius: var(--radius-6);
   background: var(--bg-secondary);
@@ -186,4 +188,8 @@
 
 .symbols-preview .btn {
   justify-content: center;
+}
+
+.symbols-search {
+  min-width: 0;
 }
