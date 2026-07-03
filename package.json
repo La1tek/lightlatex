@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "tsc",
+    "check:js": "node --check public/js/icons.js && node --check public/js/api.js && node --check public/js/auth.js && node --check public/js/tree.js && node --check public/js/editor.js && node --check public/js/preview.js && node --check public/js/app.js && node --check public/js/admin.js && node --check test/smoke-api.mjs",
+    "smoke:api": "node test/smoke-api.mjs",
     "dev": "ts-node-dev --respawn src/index.ts",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
