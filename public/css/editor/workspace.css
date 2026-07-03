@@ -10,10 +10,10 @@
   height: var(--toolbar-height);
   flex: 0 0 var(--toolbar-height);
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto minmax(420px, 1fr);
+  grid-template-columns: minmax(220px, 1fr) auto minmax(180px, 1fr);
   align-items: center;
   gap: var(--space-12);
-  padding: 0 var(--space-8);
+  padding: 0 var(--space-12);
   background: var(--bg-secondary);
   border-bottom: var(--panel-border);
   overflow: hidden;
@@ -32,20 +32,16 @@
 
 .editor-toolbar-center {
   justify-content: center;
+  gap: var(--space-8);
 }
 
 .editor-toolbar-right {
-  justify-content: flex-start;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
+  justify-content: flex-end;
+  overflow: visible;
   height: 100%;
 }
 
-.editor-toolbar-right::-webkit-scrollbar {
-  display: none;
-}
-
+.editor-toolbar-center > *,
 .editor-toolbar-right > * {
   flex: 0 0 auto;
 }
@@ -131,7 +127,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-6);
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-12);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-6);
   background: var(--bg-secondary);

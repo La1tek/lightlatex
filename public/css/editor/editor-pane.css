@@ -6,6 +6,44 @@
   background: var(--bg-editor);
 }
 
+.editor-actionbar {
+  min-height: 40px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-8);
+  border-bottom: var(--panel-border);
+  background: var(--bg-secondary);
+}
+
+.editor-action-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  padding-right: var(--space-8);
+  margin-right: var(--space-2);
+  border-right: var(--panel-border);
+}
+
+.editor-action-group:last-child {
+  padding-right: 0;
+  margin-right: 0;
+  border-right: 0;
+}
+
+.editor-actionbar .btn-small {
+  min-height: 30px;
+  padding: 0 var(--space-8);
+}
+
+.editor-actionbar .btn-small svg {
+  width: 16px;
+  height: 16px;
+}
+
 .editor-tabbar {
   height: 36px;
   flex: 0 0 36px;
@@ -14,6 +52,7 @@
   background: var(--bg-secondary);
   border-bottom: var(--panel-border);
   overflow: hidden;
+  padding-left: var(--space-4);
 }
 
 .editor-tab {
@@ -22,7 +61,7 @@
   align-items: center;
   gap: var(--space-6);
   max-width: min(360px, 80%);
-  padding: 0 var(--space-16);
+  padding: 0 var(--space-12);
   border-right: var(--panel-border);
   color: var(--text-primary);
   font-family: var(--font-code);

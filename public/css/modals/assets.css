@@ -58,7 +58,7 @@
   min-width: 0;
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-10);
+  padding: var(--space-12);
 }
 
 .asset-info strong,
@@ -84,7 +84,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  padding: 0 var(--space-10) var(--space-10);
+  padding: 0 var(--space-12) var(--space-12);
 }
 
 .asset-actions .btn {

@@ -20,28 +20,11 @@
           </div>
           <div class="editor-toolbar-center">
             <button class="compile-status" id="compile-status" type="button" title="Compile status">${Icons.play16} Idle</button>
+            <button class="btn btn-primary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
           </div>
           <div class="editor-toolbar-right">
             <button class="sync-status synced" id="sync-status-btn" type="button" title="CLI sync status">${Icons.sync16} Synced</button>
-            <button class="btn btn-primary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
-            <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
-            <button class="btn btn-secondary btn-small" id="comments-btn" title="Comments">${Icons.comment16} Comments</button>
-            <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} Symbols</button>
-            <button class="btn btn-secondary btn-small" id="citation-manager-btn" title="Citation manager">${Icons.cite16} Cite</button>
-            <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
-            <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
-            <button class="btn btn-secondary btn-small" id="snapshot-btn" title="Create named snapshot">${Icons.save16} Snapshot</button>
             <button class="btn btn-secondary btn-small" id="settings-btn" title="Project settings">${Icons.settings} Settings</button>
-            <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
-            <button class="btn btn-secondary btn-small" id="preflight-btn" title="Run preflight check">${Icons.check14} Check</button>
-            <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
-            <button class="btn btn-secondary btn-small" id="asset-manager-btn" title="Asset manager">${Icons.image16} Assets</button>
-            <button class="btn btn-secondary btn-small" id="download-pdf-btn" title="Download PDF">${Icons.download16} PDF</button>
-            <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} ZIP</button>
-            <button class="btn btn-secondary btn-small" id="toggle-preview-btn" title="Toggle preview">${Icons.eye16} Preview</button>
-            <button class="btn btn-secondary btn-small" id="layout-btn" title="Workspace layout">${Icons.layout16} Layout</button>
-            <button class="btn btn-secondary btn-small" id="focus-btn" title="Focus mode">${Icons.focus16} Focus</button>
-            <button class="btn btn-secondary btn-small" id="shortcuts-btn" title="Keyboard shortcuts">${Icons.keyboard16} Keys</button>
             <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme" aria-label="Toggle theme">${currentTheme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
             <button class="btn-icon" id="editor-logout-btn" title="Logout" aria-label="Logout">${Icons.logout16}</button>
           </div>
@@ -50,7 +33,7 @@
           <div class="sidebar">
             <div class="sidebar-header">
               <span>FILES</span>
-              <button id="new-file-btn" title="New file">${Icons.plus16}</button>
+              <button id="new-file-btn" title="New file" aria-label="New file">${Icons.plus16}</button>
             </div>
             <div class="sidebar-tabs">
               <button class="sidebar-tab active" data-tab="files">Files</button>
@@ -74,6 +57,32 @@
             </div>
           </div>
           <div class="editor-pane">
+            <div class="editor-actionbar" aria-label="Editor tools">
+              <div class="editor-action-group" aria-label="Find and structure tools">
+                <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
+                <button class="btn btn-secondary btn-small" id="comments-btn" title="Comments">${Icons.comment16} Comments</button>
+                <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} Symbols</button>
+                <button class="btn btn-secondary btn-small" id="citation-manager-btn" title="Citation manager">${Icons.cite16} Cite</button>
+              </div>
+              <div class="editor-action-group" aria-label="Writing checks">
+                <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
+                <button class="btn btn-secondary btn-small" id="preflight-btn" title="Run preflight check">${Icons.check14} Check</button>
+                <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
+              </div>
+              <div class="editor-action-group" aria-label="History and assets">
+                <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
+                <button class="btn btn-secondary btn-small" id="snapshot-btn" title="Create named snapshot">${Icons.save16} Snapshot</button>
+                <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
+                <button class="btn btn-secondary btn-small" id="asset-manager-btn" title="Asset manager">${Icons.image16} Assets</button>
+              </div>
+              <div class="editor-action-group" aria-label="Workspace view and export">
+                <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} ZIP</button>
+                <button class="btn btn-secondary btn-small" id="toggle-preview-btn" title="Toggle preview">${Icons.eye16} Preview</button>
+                <button class="btn btn-secondary btn-small" id="layout-btn" title="Workspace layout">${Icons.layout16} Layout</button>
+                <button class="btn btn-secondary btn-small" id="focus-btn" title="Focus mode">${Icons.focus16} Focus</button>
+                <button class="btn btn-secondary btn-small" id="shortcuts-btn" title="Keyboard shortcuts">${Icons.keyboard16} Keys</button>
+              </div>
+            </div>
             <div class="editor-tabbar">
               <div class="editor-tab active" id="current-file-tab">${Icons.fileTex} No file</div>
             </div>
@@ -83,10 +92,11 @@
             <div class="preview-header">
               <span id="pdf-page-info">PDF Preview</span>
               <div class="preview-nav">
-                <button class="btn-icon" id="pdf-prev">${Icons.chevronLeft16}</button>
+                <button class="btn-icon" id="pdf-prev" title="Previous page" aria-label="Previous PDF page">${Icons.chevronLeft16}</button>
                 <span id="pdf-page-num"></span>
-                <button class="btn-icon" id="pdf-next">${Icons.chevronRight16}</button>
+                <button class="btn-icon" id="pdf-next" title="Next page" aria-label="Next PDF page">${Icons.chevronRight16}</button>
                 <button class="btn btn-secondary btn-tiny" id="pdf-fit-width" type="button">Fit</button>
+                <button class="btn btn-secondary btn-tiny" id="download-pdf-btn" title="Download PDF" type="button">${Icons.download16} PDF</button>
                 <button class="btn-icon" id="pdf-refresh" title="Refresh PDF" aria-label="Refresh PDF">${Icons.sync16}</button>
                 <button class="btn-icon" id="pdf-copy-link" title="Copy PDF endpoint" aria-label="Copy PDF endpoint">${Icons.link16}</button>
                 <button class="btn-icon" id="pdf-zoom-out" title="Zoom out" aria-label="Zoom out">−</button>

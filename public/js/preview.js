@@ -6,6 +6,7 @@ let rendering = false;
 let pageElements = [];
 let zoomMode = 'fit-width';
 let zoomScale = 1;
+let currentCssScale = 1;
 
 const Preview = {
   init(containerEl) {
@@ -72,20 +73,39 @@ const Preview = {
           || previewContainer.closest('.preview-pane')?.clientWidth
           || 760;
         const visibleHeight = previewContainer.clientHeight || 640;
-        const containerWidth = Math.max(320, visibleWidth - 40);
+        const containerStyles = getComputedStyle(previewContainer);
+        const horizontalPadding =
+          parseFloat(containerStyles.paddingLeft || '0') +
+          parseFloat(containerStyles.paddingRight || '0');
+        const containerWidth = Math.max(320, visibleWidth - horizontalPadding - 16);
         const scale = zoomMode === 'fit-width'
           ? Math.min(containerWidth / baseViewport.width, 2.0)
           : zoomMode === 'fit-page'
             ? Math.min(containerWidth / baseViewport.width, Math.max(0.25, (visibleHeight - 64) / baseViewport.height), 2.0)
             : zoomScale;
         const viewport = page.getViewport({ scale });
+        currentCssScale = scale;
 
         const canvas = pageElements[i - 1].querySelector('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        const outputScale = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+        const pixelWidth = Math.floor(viewport.width * outputScale);
+        const pixelHeight = Math.floor(viewport.height * outputScale);
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+        canvas.style.width = `${Math.round(viewport.width)}px`;
+        canvas.style.height = `${Math.round(viewport.height)}px`;
+        pageElements[i - 1].style.width = `${Math.round(viewport.width)}px`;
+        canvas.dataset.scale = String(scale);
+        canvas.dataset.outputScale = String(outputScale);
 
         const ctx = canvas.getContext('2d');
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+        await page.render({
+          canvasContext: ctx,
+          viewport,
+          transform: outputScale === 1 ? null : [outputScale, 0, 0, outputScale, 0, 0],
+        }).promise;
       } catch (err) {
         // skip failed pages
       }
@@ -153,7 +173,7 @@ const Preview = {
 
   getCurrentScale() {
     const canvas = pageElements[0]?.querySelector('canvas');
-    return canvas ? canvas.width / 595 : zoomScale;
+    return canvas?.dataset.scale ? parseFloat(canvas.dataset.scale) : currentCssScale || zoomScale;
   },
 
   getZoomLabel() {

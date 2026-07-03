@@ -8,7 +8,7 @@
   grid-template-columns: minmax(220px, 1fr) 150px auto auto;
   align-items: center;
   gap: var(--space-8);
-  margin-bottom: var(--space-10);
+  margin-bottom: var(--space-12);
 }
 
 .citation-search {
@@ -29,7 +29,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
-  margin-bottom: var(--space-10);
+  margin-bottom: var(--space-12);
 }
 
 .citation-summary span {
@@ -57,7 +57,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-12);
   align-items: center;
-  padding: var(--space-10) var(--space-4);
+  padding: var(--space-12) var(--space-4);
   border-bottom: var(--panel-border);
 }
 

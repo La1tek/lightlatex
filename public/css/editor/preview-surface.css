@@ -1,11 +1,11 @@
 .preview-header {
-  height: 36px;
-  flex: 0 0 36px;
+  min-height: 40px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-  padding: 0 var(--space-12);
+  padding: var(--space-4) var(--space-12);
   border-bottom: var(--panel-border);
   color: var(--text-secondary);
   font-size: var(--text-12);
@@ -14,8 +14,11 @@
 
 .preview-nav {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-4);
+  min-width: 0;
 }
 
 .btn-tiny {
@@ -39,8 +42,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-16);
-  padding: var(--space-20);
+  gap: var(--space-20);
+  padding: var(--space-24);
   background:
     linear-gradient(45deg, rgba(148, 163, 184, 0.10) 25%, transparent 25%),
     linear-gradient(-45deg, rgba(148, 163, 184, 0.10) 25%, transparent 25%),
@@ -61,7 +64,10 @@
 
 .pdf-page-canvas {
   display: block;
+  width: auto;
+  height: auto;
   max-width: 100%;
+  background: #ffffff;
 }
 
 .pdf-page-label {

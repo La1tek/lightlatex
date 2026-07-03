@@ -44,7 +44,7 @@
 .share-list {
   display: grid;
   gap: var(--space-6);
-  margin-top: var(--space-10);
+  margin-top: var(--space-12);
 }
 
 .share-row {
@@ -89,7 +89,7 @@
 
 .panel-empty.compact {
   min-height: 56px;
-  padding: var(--space-10);
+  padding: var(--space-12);
 }
 
 .copy-row {
@@ -113,7 +113,7 @@
 .cli-token-box {
   display: grid;
   gap: var(--space-8);
-  margin-top: var(--space-10);
+  margin-top: var(--space-12);
 }
 
 .settings-token-actions {
@@ -125,7 +125,7 @@
 .cli-command-list {
   display: grid;
   gap: var(--space-6);
-  margin-top: var(--space-10);
+  margin-top: var(--space-12);
 }
 
 .cli-command-row {

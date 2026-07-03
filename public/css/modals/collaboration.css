@@ -20,7 +20,7 @@
 .comment-list {
   display: grid;
   gap: var(--space-8);
-  margin-top: var(--space-14);
+  margin-top: var(--space-16);
 }
 
 .comment-row {
@@ -28,7 +28,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-12);
   align-items: start;
-  padding: var(--space-10);
+  padding: var(--space-12);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-6);
   background: var(--bg-tertiary);

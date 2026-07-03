@@ -18,7 +18,7 @@
 
 .symbols-tabs button {
   min-height: 30px;
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-12);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-6);
   background: var(--bg-secondary);
@@ -49,7 +49,7 @@
   display: grid;
   align-content: center;
   gap: var(--space-4);
-  padding: var(--space-10);
+  padding: var(--space-12);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-6);
   background: var(--bg-secondary);

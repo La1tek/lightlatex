@@ -24,16 +24,20 @@
       const result = await api.post(`/projects/${app.currentProjectId}/compile`);
       app.lastCompileJob = result.job || null;
       let issues = Array.isArray(result.errors) ? result.errors : [];
-      if (issues.length === 0 && result.job?.message) {
+      const jobMessage = result.job?.message || '';
+      const jobStatus = result.job?.status || '';
+      const failedRun = !result.success || ['error', 'failed', 'cancelled'].includes(jobStatus);
+      if (issues.length === 0 && failedRun && jobMessage) {
         issues = [{ line: 0, message: result.job.message, severity: 'error' }];
       }
       const errors = issues.filter((e) => e.severity !== 'warning');
       const warnings = issues.filter((e) => e.severity === 'warning');
       app.lastCompileErrors = issues;
-      app.compileLog = result.log || result.job?.message || issues.map((issue) => {
+      const synthesizedLog = issues.map((issue) => {
         const severity = issue.severity === 'warning' ? 'WARNING' : 'ERROR';
         return `${severity} line ${issue.line || 0}: ${issue.message || 'Unknown compile issue'}`;
       }).join('\n');
+      app.compileLog = result.log || synthesizedLog || (failedRun ? jobMessage : '');
       renderCompilePanel(app, 'issues');
 
       if (result.success && result.pdfGenerated) {
@@ -120,13 +124,17 @@
       </div>
     ` : `
       <div class="log-list">
-        ${issues.map((issue, index) => `
-          <button class="log-row ${issue.severity === 'warning' ? 'warning' : 'error'}" data-index="${index}" type="button">
-            <span class="log-severity">${issue.severity === 'warning' ? 'Warning' : 'Error'}</span>
-            <span class="log-line">Line ${issue.line || 0}</span>
-            <span class="log-message">${app.escapeHtml(issue.message || 'Unknown compile issue')}</span>
-          </button>
-        `).join('')}
+        ${issues.map((issue, index) => {
+          const isWarning = issue.severity === 'warning';
+          const lineLabel = issue.line ? `Line ${issue.line}` : 'Project';
+          return `
+            <button class="log-row ${isWarning ? 'warning' : 'error'}" data-index="${index}" type="button">
+              <span class="log-severity">${isWarning ? 'Warning' : 'Error'}</span>
+              <span class="log-line">${lineLabel}</span>
+              <span class="log-message">${app.escapeHtml(issue.message || 'Unknown compile issue')}</span>
+            </button>
+          `;
+        }).join('')}
       </div>
     `;
     body.querySelectorAll('.log-row').forEach((row) => {

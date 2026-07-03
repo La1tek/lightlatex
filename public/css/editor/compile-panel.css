@@ -99,7 +99,7 @@
 .compile-job-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-10);
+  gap: var(--space-12);
   align-items: center;
   padding: var(--space-8);
   border: 1px solid var(--border-color);

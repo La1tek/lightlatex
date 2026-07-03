@@ -48,10 +48,18 @@
 
 @media (max-width: 1180px) {
   .editor-toolbar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto minmax(96px, auto);
   }
 
   .editor-toolbar-center {
+    display: flex;
+  }
+
+  .editor-toolbar-right {
+    justify-content: flex-end;
+  }
+
+  .editor-toolbar-right .sync-status {
     display: none;
   }
 
@@ -127,6 +135,11 @@
   }
 
   .editor-toolbar-right {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .editor-toolbar-center {
     justify-content: flex-start;
     flex-wrap: wrap;
   }
@@ -218,7 +231,7 @@
     grid-template-columns: 1fr;
     align-items: start;
     gap: var(--space-2);
-    padding: var(--space-8) var(--space-10);
+    padding: var(--space-8) var(--space-12);
   }
 
   .conflict-columns pre {
