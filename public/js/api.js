@@ -45,7 +45,11 @@ class Api {
         return retryRes;
       } catch {
         this.clearTokens();
-        window.location.hash = '#/login';
+        if (window.location.hash === '#/login') {
+          window.dispatchEvent(new Event('hashchange'));
+        } else {
+          window.location.hash = '#/login';
+        }
         throw new Error('Session expired');
       }
     }
