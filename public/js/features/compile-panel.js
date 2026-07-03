@@ -23,7 +23,7 @@
 
       const result = await api.post(`/projects/${app.currentProjectId}/compile`);
       app.lastCompileJob = result.job || null;
-      let issues = Array.isArray(result.errors) ? result.errors : [];
+      let issues = (Array.isArray(result.errors) ? result.errors : []).filter((issue) => !isSuccessfulCompileMessage(issue));
       const jobMessage = result.job?.message || '';
       const jobStatus = result.job?.status || '';
       const failedRun = !result.success || ['error', 'failed', 'cancelled'].includes(jobStatus);
@@ -59,7 +59,7 @@
         statusEl.className = 'compile-status error';
         if (issues.length > 0) {
           Editor.setCompileErrors(issues, Editor.currentFilePath);
-          const msgs = issues.slice(0, 5).map(e => `Line ${e.line}: ${e.message}`).join('\n');
+          const msgs = issues.slice(0, 5).map(e => `${e.line ? `Line ${e.line}` : 'Project'}: ${e.message}`).join('\n');
           app.notify('Compilation failed:\n' + msgs, 'error');
           openCompilePanel(app);
         } else {
@@ -87,6 +87,13 @@
         compileBtn.innerHTML = `${Icons.play16} Compile`;
       }
     }
+  }
+
+  function isSuccessfulCompileMessage(issue) {
+    const message = String(issue?.message || '').toLowerCase();
+    return message.includes('compiled successfully')
+      || message.includes('compilation successful')
+      || message === 'success';
   }
 
   function openCompilePanel(app) {

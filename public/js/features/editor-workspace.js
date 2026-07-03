@@ -33,13 +33,16 @@
           <div class="sidebar">
             <div class="sidebar-header">
               <span>FILES</span>
-              <button id="new-file-btn" title="New file" aria-label="New file">${Icons.plus16}</button>
             </div>
             <div class="sidebar-tabs">
               <button class="sidebar-tab active" data-tab="files">Files</button>
               <button class="sidebar-tab" data-tab="outline">${Icons.outline16} Outline</button>
               <button class="sidebar-tab" data-tab="refs">${Icons.link16} Refs</button>
               <button class="sidebar-tab" data-tab="todo">${Icons.todo16} TODO</button>
+            </div>
+            <div class="sidebar-file-actions" id="sidebar-file-actions">
+              <button class="btn btn-secondary btn-small" id="new-file-btn" type="button" title="New file">${Icons.plus16} New file</button>
+              <button class="btn btn-secondary btn-small" id="upload-image-btn" type="button" title="Upload image or PDF asset">${Icons.upload16} Upload</button>
             </div>
             <div class="tree-container" id="file-tree"></div>
             <div class="recent-files-panel" id="recent-files-panel"></div>
@@ -56,31 +59,31 @@
               <div class="panel-content" id="todo-content"></div>
             </div>
           </div>
+          <div class="sidebar-resizer" id="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize file sidebar" tabindex="0"></div>
           <div class="editor-pane">
             <div class="editor-actionbar" aria-label="Editor tools">
-              <div class="editor-action-group" aria-label="Find and structure tools">
+              <div class="editor-action-primary" aria-label="Editor quick tools">
                 <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
                 <button class="btn btn-secondary btn-small" id="comments-btn" title="Comments">${Icons.comment16} Comments</button>
                 <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} Symbols</button>
                 <button class="btn btn-secondary btn-small" id="citation-manager-btn" title="Citation manager">${Icons.cite16} Cite</button>
-              </div>
-              <div class="editor-action-group" aria-label="Writing checks">
-                <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
-                <button class="btn btn-secondary btn-small" id="preflight-btn" title="Run preflight check">${Icons.check14} Check</button>
-                <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
-              </div>
-              <div class="editor-action-group" aria-label="History and assets">
-                <button class="btn btn-secondary btn-small" id="history-btn" title="File history">${Icons.clock14} History</button>
-                <button class="btn btn-secondary btn-small" id="snapshot-btn" title="Create named snapshot">${Icons.save16} Snapshot</button>
-                <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
                 <button class="btn btn-secondary btn-small" id="asset-manager-btn" title="Asset manager">${Icons.image16} Assets</button>
               </div>
-              <div class="editor-action-group" aria-label="Workspace view and export">
-                <button class="btn btn-secondary btn-small" id="download-btn" title="Download ZIP">${Icons.download16} ZIP</button>
-                <button class="btn btn-secondary btn-small" id="toggle-preview-btn" title="Toggle preview">${Icons.eye16} Preview</button>
-                <button class="btn btn-secondary btn-small" id="layout-btn" title="Workspace layout">${Icons.layout16} Layout</button>
-                <button class="btn btn-secondary btn-small" id="focus-btn" title="Focus mode">${Icons.focus16} Focus</button>
-                <button class="btn btn-secondary btn-small" id="shortcuts-btn" title="Keyboard shortcuts">${Icons.keyboard16} Keys</button>
+              <div class="editor-action-spacer"></div>
+              <div class="editor-more-menu" id="editor-more-menu">
+                <button class="btn btn-secondary btn-small" id="editor-more-btn" type="button" aria-expanded="false" aria-controls="editor-more-popover">${Icons.chevronDown} More</button>
+                <div class="editor-more-popover" id="editor-more-popover" hidden>
+                  <button class="editor-more-item" id="spellcheck-btn" type="button">${Icons.spellcheck16}<span>Spellcheck</span></button>
+                  <button class="editor-more-item" id="preflight-btn" type="button">${Icons.check14}<span>Preflight check</span></button>
+                  <button class="editor-more-item" id="autocompile-btn" type="button">${Icons.autoCompile16}<span>Auto compile</span></button>
+                  <button class="editor-more-item" id="history-btn" type="button">${Icons.clock14}<span>History</span></button>
+                  <button class="editor-more-item" id="snapshot-btn" type="button">${Icons.save16}<span>Snapshot</span></button>
+                  <button class="editor-more-item" id="download-btn" type="button">${Icons.download16}<span>Download ZIP</span></button>
+                  <button class="editor-more-item" id="toggle-preview-btn" type="button">${Icons.eye16}<span>Preview</span></button>
+                  <button class="editor-more-item" id="layout-btn" type="button">${Icons.layout16}<span>Split</span></button>
+                  <button class="editor-more-item" id="focus-btn" type="button">${Icons.focus16}<span>Focus</span></button>
+                  <button class="editor-more-item" id="shortcuts-btn" type="button">${Icons.keyboard16}<span>Keyboard shortcuts</span></button>
+                </div>
               </div>
             </div>
             <div class="editor-tabbar">
@@ -204,6 +207,8 @@
 
     app.loadPdf();
     bindToolbar(app);
+    bindEditorMoreMenu();
+    bindSidebarResize(app);
     bindAssetUpload(app);
     bindAutosave(app);
     bindSpellcheck();
@@ -221,7 +226,7 @@
         tab.classList.add('active');
         const tabName = tab.dataset.tab;
         document.getElementById('file-tree').style.display = tabName === 'files' ? '' : 'none';
-        document.getElementById('new-file-btn').style.display = tabName === 'files' ? '' : 'none';
+        document.getElementById('sidebar-file-actions').style.display = tabName === 'files' ? '' : 'none';
         document.querySelector('.sidebar-header').style.display = tabName === 'files' ? '' : 'none';
         document.getElementById('outline-panel').style.display = tabName === 'outline' ? '' : 'none';
         document.getElementById('refs-panel').style.display = tabName === 'refs' ? '' : 'none';
@@ -283,6 +288,106 @@
     document.getElementById('citation-manager-btn').addEventListener('click', () => app.showCitationManager());
     document.getElementById('history-btn').addEventListener('click', () => app.showHistoryModal());
     document.getElementById('snapshot-btn').addEventListener('click', () => app.showCreateSnapshotModal());
+  }
+
+  function bindEditorMoreMenu() {
+    const menu = document.getElementById('editor-more-menu');
+    const button = document.getElementById('editor-more-btn');
+    const popover = document.getElementById('editor-more-popover');
+    if (!menu || !button || !popover) return;
+
+    const close = () => {
+      popover.hidden = true;
+      button.setAttribute('aria-expanded', 'false');
+    };
+
+    const toggle = () => {
+      const nextOpen = popover.hidden;
+      popover.hidden = !nextOpen;
+      button.setAttribute('aria-expanded', String(nextOpen));
+    };
+
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggle();
+    });
+
+    popover.querySelectorAll('button').forEach((item) => {
+      item.addEventListener('click', () => setTimeout(close, 0));
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!menu.contains(event.target)) close();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close();
+    });
+  }
+
+  function clampSidebarWidth(value) {
+    return Math.max(200, Math.min(400, value));
+  }
+
+  function setSidebarWidth(width, persist = true) {
+    const nextWidth = clampSidebarWidth(width);
+    document.documentElement.style.setProperty('--sidebar-width', `${nextWidth}px`);
+    if (persist) localStorage.setItem('lighttex-sidebar-width', String(nextWidth));
+    Editor.layout();
+  }
+
+  function refreshWorkspaceLayout(app, rerenderPreview = false) {
+    Editor.layout();
+    if (rerenderPreview && app.workspaceMode !== 'editor' && typeof Preview !== 'undefined' && pdfDoc) {
+      Preview.renderAllPages().then(() => app.updatePdfPageInfo()).catch(() => {});
+    }
+  }
+
+  function bindSidebarResize(app) {
+    const resizer = document.getElementById('sidebar-resizer');
+    const savedWidth = parseInt(localStorage.getItem('lighttex-sidebar-width') || '', 10);
+    if (Number.isFinite(savedWidth)) setSidebarWidth(savedWidth, false);
+    if (!resizer) return;
+
+    let dragStartX = 0;
+    let dragStartWidth = savedWidth || 240;
+    let dragging = false;
+
+    const endDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('resizing-sidebar');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', endDrag);
+      refreshWorkspaceLayout(app, true);
+    };
+
+    const onMove = (event) => {
+      if (!dragging) return;
+      setSidebarWidth(dragStartWidth + event.clientX - dragStartX);
+      refreshWorkspaceLayout(app);
+    };
+
+    resizer.addEventListener('pointerdown', (event) => {
+      if (window.matchMedia('(max-width: 820px)').matches) return;
+      dragging = true;
+      dragStartX = event.clientX;
+      dragStartWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width'), 10) || 240;
+      document.body.classList.add('resizing-sidebar');
+      resizer.setPointerCapture?.(event.pointerId);
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', endDrag);
+      event.preventDefault();
+    });
+
+    resizer.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width'), 10) || 240;
+      if (event.key === 'Home') setSidebarWidth(200);
+      else if (event.key === 'End') setSidebarWidth(400);
+      else setSidebarWidth(current + (event.key === 'ArrowRight' ? 16 : -16));
+      refreshWorkspaceLayout(app, true);
+    });
   }
 
   function bindAssetUpload(app) {

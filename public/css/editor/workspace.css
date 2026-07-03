@@ -171,14 +171,14 @@
   min-height: 0;
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(200px, var(--sidebar-width)) minmax(320px, 1fr) minmax(320px, 46vw);
+  grid-template-columns: minmax(200px, var(--sidebar-width)) 6px minmax(320px, 1fr) minmax(320px, 46vw);
   overflow: hidden;
   position: relative;
 }
 
 .editor-main.editor-only,
 .editor-main.pdf-only {
-  grid-template-columns: minmax(200px, var(--sidebar-width)) minmax(320px, 1fr);
+  grid-template-columns: minmax(200px, var(--sidebar-width)) 6px minmax(320px, 1fr);
 }
 
 .editor-main.editor-only .preview-pane,
@@ -188,6 +188,7 @@
 }
 
 .editor-layout.focus-mode .sidebar,
+.editor-layout.focus-mode .sidebar-resizer,
 .editor-layout.focus-mode .preview-pane,
 .editor-layout.focus-mode .compile-panel {
   display: none;
@@ -195,4 +196,9 @@
 
 .editor-layout.focus-mode .editor-main {
   grid-template-columns: minmax(0, 1fr);
+}
+
+body.resizing-sidebar {
+  cursor: col-resize;
+  user-select: none;
 }

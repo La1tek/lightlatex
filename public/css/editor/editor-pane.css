@@ -10,38 +10,101 @@
   min-height: 40px;
   flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-6);
   padding: var(--space-6) var(--space-8);
   border-bottom: var(--panel-border);
   background: var(--bg-secondary);
+  overflow: visible;
 }
 
-.editor-action-group {
-  display: inline-flex;
-  flex-wrap: wrap;
+.editor-action-primary {
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: var(--space-6);
-  padding-right: var(--space-8);
-  margin-right: var(--space-2);
-  border-right: var(--panel-border);
+  gap: var(--space-4);
+  overflow: hidden;
 }
 
-.editor-action-group:last-child {
-  padding-right: 0;
-  margin-right: 0;
-  border-right: 0;
+.editor-action-spacer {
+  flex: 1 1 auto;
+  min-width: var(--space-8);
 }
 
 .editor-actionbar .btn-small {
   min-height: 30px;
   padding: 0 var(--space-8);
+  flex: 0 0 auto;
 }
 
 .editor-actionbar .btn-small svg {
   width: 16px;
   height: 16px;
+}
+
+.editor-more-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.editor-more-popover {
+  position: absolute;
+  top: calc(100% + var(--space-6));
+  right: 0;
+  width: 230px;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: var(--panel-border);
+  border-radius: var(--radius-8);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-dropdown);
+}
+
+.editor-more-popover[hidden] {
+  display: none;
+}
+
+.editor-more-item {
+  min-height: 34px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-8);
+  border: 1px solid transparent;
+  border-radius: var(--radius-6);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-13);
+  font-weight: 600;
+  text-align: left;
+}
+
+.editor-more-item:hover,
+.editor-more-item:focus-visible,
+.editor-more-item.active {
+  outline: none;
+  border-color: var(--border-color);
+  background: var(--bg-hover);
+}
+
+.editor-more-item svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+}
+
+.editor-more-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .editor-tabbar {

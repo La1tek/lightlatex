@@ -99,6 +99,34 @@ const Editor = {
         }
       });
 
+      editor.addAction({
+        id: 'latex-bold',
+        label: 'Bold',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB],
+        run: () => this.wrapSelection('\\textbf{', '}', 'bold text')
+      });
+
+      editor.addAction({
+        id: 'latex-italic',
+        label: 'Italic',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI],
+        run: () => this.wrapSelection('\\textit{', '}', 'italic text')
+      });
+
+      editor.addAction({
+        id: 'latex-inline-math',
+        label: 'Inline Math',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyM],
+        run: () => this.wrapSelection('$', '$', 'x')
+      });
+
+      editor.addAction({
+        id: 'latex-emphasis',
+        label: 'Emphasis',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI],
+        run: () => this.wrapSelection('\\emph{', '}', 'emphasis')
+      });
+
       if (options.imageFiles) currentImageFiles = options.imageFiles;
       if (options.onReady) options.onReady();
     });
@@ -317,6 +345,39 @@ const Editor = {
     if (editor) {
       editor.updateOptions({ readOnly: readOnlyMode, domReadOnly: readOnlyMode });
     }
+  },
+
+  layout() {
+    if (editor) {
+      editor.layout();
+    }
+  },
+
+  wrapSelection(before, after = '', placeholder = '') {
+    if (!editor || readOnlyMode) return;
+    const model = editor.getModel();
+    const selection = editor.getSelection();
+    if (!model || !selection) return;
+
+    const selectedText = model.getValueInRange(selection);
+    const insertText = `${before}${selectedText || placeholder}${after}`;
+    editor.executeEdits('lighttex-wrap-selection', [{
+      range: selection,
+      text: insertText,
+      forceMoveMarkers: true,
+    }]);
+
+    if (!selectedText && placeholder) {
+      const position = editor.getPosition();
+      const column = Math.max(1, position.column - after.length - placeholder.length);
+      editor.setSelection({
+        startLineNumber: position.lineNumber,
+        startColumn: column,
+        endLineNumber: position.lineNumber,
+        endColumn: column + placeholder.length,
+      });
+    }
+    editor.focus();
   },
 
   revealLine(line) {

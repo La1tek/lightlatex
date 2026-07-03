@@ -27,10 +27,16 @@
       layoutBtn.classList.toggle('active', nextMode !== 'split');
     }
     if (previewToggle) previewToggle.classList.toggle('active', nextMode !== 'editor');
-    if (nextMode !== 'editor') {
-      app.updatePdfPageInfo();
-      app.loadPdf();
-    }
+    requestAnimationFrame(() => {
+      Editor.layout();
+      if (nextMode !== 'editor') {
+        if (typeof pdfDoc !== 'undefined' && pdfDoc) {
+          Preview.renderAllPages().then(() => app.updatePdfPageInfo()).catch(() => {});
+        } else {
+          app.loadPdf();
+        }
+      }
+    });
   }
 
   function togglePreview(app) {
@@ -109,6 +115,10 @@
       [`${mod}+K`, 'Command palette'],
       [`${mod}+P`, 'Open file palette'],
       [`${mod}+Shift+F`, 'Search across project'],
+      [`${mod}+B`, 'Wrap selection in \\textbf{}'],
+      [`${mod}+I`, 'Wrap selection in \\textit{}'],
+      [`${mod}+Shift+M`, 'Wrap selection as inline math'],
+      [`${mod}+Shift+I`, 'Wrap selection in \\emph{}'],
       [`${mod}+\\`, 'Toggle focus mode'],
       [`${mod}+Alt+1`, 'Split layout'],
       [`${mod}+Alt+2`, 'Editor-only layout'],

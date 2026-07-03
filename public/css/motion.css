@@ -64,7 +64,7 @@
   }
 
   .editor-main {
-    grid-template-columns: minmax(200px, 240px) minmax(360px, 1fr);
+    grid-template-columns: minmax(200px, var(--sidebar-width)) 6px minmax(360px, 1fr);
   }
 
   .preview-pane {
@@ -157,9 +157,12 @@
   .sidebar {
     max-width: none;
     width: 100%;
-    resize: none;
     border-right: 0;
     border-bottom: var(--panel-border);
+  }
+
+  .sidebar-resizer {
+    display: none;
   }
 
   .tree-container {

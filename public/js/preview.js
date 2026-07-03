@@ -168,7 +168,10 @@ const Preview = {
           viewport,
           transform: outputScale === 1 ? null : [outputScale, 0, 0, outputScale, 0, 0],
         }).promise;
-        if (generation !== renderGeneration) return;
+        if (generation !== renderGeneration) {
+          rendering = false;
+          return;
+        }
         await this.renderTextLayer(page, viewport, textLayer);
       } catch (err) {
         // skip failed pages
