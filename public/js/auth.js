@@ -77,7 +77,7 @@ const Auth = {
         submit.textContent = 'Signing in...';
         const result = await api.post('/auth/login', { email, password });
         api.setTokens(result.accessToken, result.refreshToken);
-        window.location.hash = '#/';
+        window.location.hash = this.nextHashAfterAuth();
       } catch (err) {
         errEl.textContent = err.message || 'Login failed';
       } finally {
@@ -171,7 +171,7 @@ const Auth = {
         submit.textContent = 'Creating account...';
         const result = await api.post('/auth/register', { email, password, name });
         api.setTokens(result.accessToken, result.refreshToken);
-        window.location.hash = '#/';
+        window.location.hash = this.nextHashAfterAuth();
       } catch (err) {
         errEl.textContent = err.message || 'Registration failed';
       } finally {
@@ -209,5 +209,11 @@ const Auth = {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  },
+
+  nextHashAfterAuth() {
+    const pendingInvite = localStorage.getItem('pendingProjectInvite');
+    if (pendingInvite) return `#/invite/${encodeURIComponent(pendingInvite)}`;
+    return '#/';
   },
 };

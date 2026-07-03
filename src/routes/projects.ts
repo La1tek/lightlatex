@@ -21,6 +21,19 @@ import {
   regenerateProjectCliToken,
   revokeProjectCliToken,
 } from "../services/cliTokens";
+import {
+  createProjectComment,
+  deleteProjectComment,
+  listProjectComments,
+  resolveProjectComment,
+  updateProjectComment,
+} from "../services/comments";
+import {
+  acceptProjectInvite,
+  createProjectInvite,
+  listProjectInvites,
+  revokeProjectInvite,
+} from "../services/invites";
 
 const router = Router();
 router.use(authMiddleware);
@@ -37,6 +50,14 @@ router.post("/", async (req: AuthRequest, res: Response) => {
   try {
     const project = await createProjectForUser(req.userId!, req.body);
     res.status(201).json(project);
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+router.post("/invites/accept", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await acceptProjectInvite(String(req.body?.token || ""), req.userId!));
   } catch (err: any) {
     sendError(res, err);
   }
@@ -95,6 +116,79 @@ router.delete("/:id/cli-token", async (req: AuthRequest, res: Response) => {
   try {
     await revokeProjectCliToken(p(req, "id"), req.userId!);
     res.json({ ok: true });
+  } catch (err: any) {
+    sendError(res, err, 404);
+  }
+});
+
+router.get("/:id/comments", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await listProjectComments(p(req, "id"), req.userId!, {
+      filePath: req.query.filePath,
+      includeResolved: req.query.includeResolved,
+    }));
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+router.post("/:id/comments", async (req: AuthRequest, res: Response) => {
+  try {
+    res.status(201).json(await createProjectComment(p(req, "id"), req.userId!, req.body));
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+router.put("/:id/comments/:commentId", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await updateProjectComment(p(req, "id"), req.userId!, String(req.params.commentId), req.body));
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+router.post("/:id/comments/:commentId/resolve", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await resolveProjectComment(
+      p(req, "id"),
+      req.userId!,
+      String(req.params.commentId),
+      req.body?.resolved !== false,
+    ));
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+router.delete("/:id/comments/:commentId", async (req: AuthRequest, res: Response) => {
+  try {
+    await deleteProjectComment(p(req, "id"), req.userId!, String(req.params.commentId));
+    res.json({ ok: true });
+  } catch (err: any) {
+    sendError(res, err, 404);
+  }
+});
+
+router.get("/:id/invites", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await listProjectInvites(p(req, "id"), req.userId!));
+  } catch (err: any) {
+    sendError(res, err, 404);
+  }
+});
+
+router.post("/:id/invites", async (req: AuthRequest, res: Response) => {
+  try {
+    res.status(201).json(await createProjectInvite(p(req, "id"), req.userId!, req.body));
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+router.delete("/:id/invites/:inviteId", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await revokeProjectInvite(p(req, "id"), req.userId!, String(req.params.inviteId)));
   } catch (err: any) {
     sendError(res, err, 404);
   }

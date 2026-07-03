@@ -16,6 +16,14 @@ export function isSafeMainFile(value: unknown): value is string {
     && !value.split(/[\\/]+/).includes("..");
 }
 
+export function isSafeProjectRelativePath(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && value.length <= 500
+    && !value.startsWith("/")
+    && !value.split(/[\\/]+/).includes("..");
+}
+
 export function validateCollaboratorRole(value: unknown): CollaboratorRole {
   const role = typeof value === "string" ? value.trim() : "viewer";
   if (!COLLABORATOR_ROLES.includes(role as CollaboratorRole)) {

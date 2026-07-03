@@ -1,0 +1,145 @@
+.collaboration-modal {
+  width: min(760px, 100%);
+}
+
+.comment-form {
+  padding: var(--space-12);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-secondary);
+}
+
+.comment-target-grid {
+  grid-template-columns: minmax(0, 1fr) 112px;
+}
+
+.compact-actions {
+  margin-top: var(--space-12);
+}
+
+.comment-list {
+  display: grid;
+  gap: var(--space-8);
+  margin-top: var(--space-14);
+}
+
+.comment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-12);
+  align-items: start;
+  padding: var(--space-10);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-tertiary);
+}
+
+.comment-row.resolved {
+  opacity: 0.72;
+}
+
+.comment-row-main {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-6);
+}
+
+.comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  align-items: center;
+  color: var(--text-muted);
+  font-size: var(--text-11);
+}
+
+.comment-meta strong {
+  color: var(--text-primary);
+  font-size: var(--text-12);
+}
+
+.comment-row p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-13);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.comment-actions {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+}
+
+.check-row.compact {
+  min-height: 32px;
+  font-size: var(--text-12);
+}
+
+.invite-panel {
+  display: grid;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--border-color);
+}
+
+.invite-create-row {
+  display: grid;
+  grid-template-columns: 132px 92px 92px auto;
+  gap: var(--space-8);
+  align-items: center;
+}
+
+.invite-list {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.invite-row {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-8);
+  align-items: center;
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-6);
+  background: var(--bg-tertiary);
+}
+
+.invite-row span {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.invite-row strong,
+.invite-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-row strong {
+  color: var(--text-primary);
+  font-size: var(--text-12);
+}
+
+.invite-row small {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+}
+
+@media (max-width: 680px) {
+  .comment-row,
+  .invite-create-row {
+    grid-template-columns: 1fr;
+  }
+
+  .comment-actions {
+    flex-wrap: wrap;
+  }
+}

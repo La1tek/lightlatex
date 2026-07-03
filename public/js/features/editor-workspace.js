@@ -24,6 +24,7 @@
           <div class="editor-toolbar-right">
             <button class="sync-status synced" id="sync-status-btn" type="button" title="CLI sync status">${Icons.sync16} Synced</button>
             <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
+            <button class="btn btn-secondary btn-small" id="comments-btn" title="Comments">${Icons.comment16} Comments</button>
             <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} Symbols</button>
             <button class="btn btn-secondary btn-small" id="citation-manager-btn" title="Citation manager">${Icons.cite16} Cite</button>
             <button class="btn btn-secondary btn-small" id="spellcheck-btn" title="Toggle spellchecker">${Icons.spellcheck16} Spell</button>
@@ -252,6 +253,7 @@
       });
     });
     document.getElementById('search-btn').addEventListener('click', () => app.showSearchModal());
+    document.getElementById('comments-btn').addEventListener('click', () => app.showCommentsModal());
     document.getElementById('symbols-btn').addEventListener('click', () => app.showSymbolsPalette());
     document.getElementById('citation-manager-btn').addEventListener('click', () => app.showCitationManager());
     document.getElementById('history-btn').addEventListener('click', () => app.showHistoryModal());

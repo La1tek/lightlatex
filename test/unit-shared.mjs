@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { getCompiler, isSafeMainFile, validateCollaboratorRole } from '../dist/shared/validation.js';
+import { getCompiler, isSafeMainFile, isSafeProjectRelativePath, validateCollaboratorRole } from '../dist/shared/validation.js';
 import { resolveInside, resolveProjectPath } from '../dist/storage/paths.js';
 import { validateZipEntryPath } from '../dist/storage/projectFiles.js';
 
@@ -16,6 +16,10 @@ assert.equal(isSafeMainFile('chapters/intro.tex'), true);
 assert.equal(isSafeMainFile('../main.tex'), false);
 assert.equal(isSafeMainFile('/tmp/main.tex'), false);
 assert.equal(isSafeMainFile('main.pdf'), false);
+assert.equal(isSafeProjectRelativePath('chapters/intro.tex'), true);
+assert.equal(isSafeProjectRelativePath('images/figure.pdf'), true);
+assert.equal(isSafeProjectRelativePath('../escape.tex'), false);
+assert.equal(isSafeProjectRelativePath('/absolute.tex'), false);
 
 const base = '/tmp/lighttex-safe-base';
 assert.equal(resolveInside(base, 'a', 'b.tex'), '/tmp/lighttex-safe-base/a/b.tex');

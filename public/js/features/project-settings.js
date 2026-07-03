@@ -54,6 +54,22 @@
               <div class="share-list" id="share-list">
                 <div class="panel-loading">Loading collaborators...</div>
               </div>
+              <div class="invite-panel">
+                <div class="invite-create-row">
+                  <select id="invite-role">
+                    <option value="viewer">Viewer link</option>
+                    <option value="editor">Editor link</option>
+                  </select>
+                  <input id="invite-expires" type="number" min="1" max="365" value="14" aria-label="Invite expiry in days">
+                  <input id="invite-max-uses" type="number" min="1" max="500" value="25" aria-label="Invite max uses">
+                  <button class="btn btn-secondary btn-small" type="button" id="invite-create">${Icons.link16} Create link</button>
+                </div>
+                <div class="field-error" id="invite-error" role="alert"></div>
+                <div class="invite-reveal" id="invite-reveal"></div>
+                <div class="invite-list" id="invite-list">
+                  <div class="panel-loading">Loading invites...</div>
+                </div>
+              </div>
             </div>
           ` : ''}
           <div class="settings-section">
@@ -211,6 +227,63 @@
         }
       };
 
+      const renderInvites = async (revealedToken) => {
+        const list = overlay.querySelector('#invite-list');
+        const reveal = overlay.querySelector('#invite-reveal');
+        if (!list || !reveal) return;
+        if (revealedToken) {
+          const url = LightTeXFeatures.collaborationCenter.inviteUrl(revealedToken);
+          reveal.innerHTML = `
+            <div class="copy-row">
+              <code>${app.escapeHtml(url)}</code>
+              <button class="btn btn-secondary btn-small" type="button" id="copy-invite-link">Copy link</button>
+            </div>
+          `;
+          reveal.querySelector('#copy-invite-link').addEventListener('click', async () => {
+            try {
+              await navigator.clipboard?.writeText(url);
+              app.notify('Invite link copied', 'success');
+            } catch {
+              app.notify('Could not copy invite link automatically', 'error');
+            }
+          });
+        }
+        list.innerHTML = '<div class="panel-loading">Loading invites...</div>';
+        try {
+          const invites = await api.get(`/projects/${app.currentProjectId}/invites`);
+          const active = invites.filter((invite) => !invite.revokedAt);
+          list.innerHTML = active.length === 0 ? `
+            <div class="panel-empty compact">
+              <strong>No active invite links</strong>
+              <span>Create a time-limited link for registered users.</span>
+            </div>
+          ` : active.map((invite) => `
+            <div class="invite-row" data-invite="${app.escapeHtml(invite.id)}">
+              <span>
+                <strong>${app.escapeHtml(invite.role)} · ${app.escapeHtml(invite.tokenPrefix)}...</strong>
+                <small>${invite.useCount}/${invite.maxUses} uses · expires ${new Date(invite.expiresAt).toLocaleDateString()}</small>
+              </span>
+              <button class="btn btn-danger btn-small" type="button" data-invite-revoke="${app.escapeHtml(invite.id)}">Revoke</button>
+            </div>
+          `).join('');
+          list.querySelectorAll('[data-invite-revoke]').forEach((button) => {
+            button.addEventListener('click', async () => {
+              if (!confirm('Revoke this invite link?')) return;
+              await api.del(`/projects/${app.currentProjectId}/invites/${button.dataset.inviteRevoke}`);
+              app.notify('Invite revoked', 'success');
+              renderInvites();
+            });
+          });
+        } catch (err) {
+          list.innerHTML = `
+            <div class="panel-empty error">
+              <strong>Could not load invites</strong>
+              <span>${app.escapeHtml(err.message || 'Unknown invite error')}</span>
+            </div>
+          `;
+        }
+      };
+
       overlay.querySelector('#share-add').addEventListener('click', async () => {
         const email = overlay.querySelector('#share-email').value.trim();
         const role = overlay.querySelector('#share-role').value;
@@ -229,7 +302,23 @@
           error.textContent = err.message;
         }
       });
+      overlay.querySelector('#invite-create').addEventListener('click', async () => {
+        const error = overlay.querySelector('#invite-error');
+        error.textContent = '';
+        try {
+          const invite = await api.post(`/projects/${app.currentProjectId}/invites`, {
+            role: overlay.querySelector('#invite-role').value,
+            expiresInDays: Number(overlay.querySelector('#invite-expires').value || 14),
+            maxUses: Number(overlay.querySelector('#invite-max-uses').value || 25),
+          });
+          app.notify('Invite link created. Copy it now; the full token is shown once.', 'success');
+          renderInvites(invite.token);
+        } catch (err) {
+          error.textContent = err.message;
+        }
+      });
       renderSharing();
+      renderInvites();
       renderCliToken();
     }
     overlay.querySelector('#project-settings-form').addEventListener('submit', async (e) => {

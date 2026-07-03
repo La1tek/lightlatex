@@ -22,6 +22,7 @@ const APP_SCRIPTS = [
   '/js/features/workspace-layout.js',
   '/js/features/editor-workspace.js',
   '/js/features/sync-center.js',
+  '/js/features/collaboration-center.js',
   '/js/features/history-modal.js',
   '/js/features/command-palette.js',
   '/js/features/compile-panel.js',

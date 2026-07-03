@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, index, unique } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, uuid, varchar, text, timestamp, index, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
@@ -60,6 +60,39 @@ export const projectCliTokens = pgTable("project_cli_tokens", {
   index("idx_project_cli_tokens_user").on(table.userId),
 ]);
 
+export const projectComments = pgTable("project_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  authorId: uuid("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  filePath: varchar("file_path", { length: 500 }),
+  lineNumber: integer("line_number"),
+  body: text("body").notNull(),
+  resolved: boolean("resolved").notNull().default(false),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_project_comments_project").on(table.projectId),
+  index("idx_project_comments_file").on(table.projectId, table.filePath),
+]);
+
+export const projectInvites = pgTable("project_invites", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 20 }).notNull().default("viewer"),
+  tokenHash: varchar("token_hash", { length: 255 }).notNull().unique(),
+  tokenPrefix: varchar("token_prefix", { length: 16 }).notNull(),
+  maxUses: integer("max_uses").notNull().default(25),
+  useCount: integer("use_count").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_project_invites_project").on(table.projectId),
+  index("idx_project_invites_hash").on(table.tokenHash),
+]);
+
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -71,6 +104,8 @@ export const sessions = pgTable("sessions", {
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),
   collaborations: many(projectCollaborators),
+  comments: many(projectComments),
+  projectInvites: many(projectInvites),
 }));
 
 export const projectsRelations = relations(projects, ({ many, one }) => ({
@@ -78,6 +113,8 @@ export const projectsRelations = relations(projects, ({ many, one }) => ({
   files: many(files),
   collaborators: many(projectCollaborators),
   cliTokens: many(projectCliTokens),
+  comments: many(projectComments),
+  invites: many(projectInvites),
 }));
 
 export const filesRelations = relations(files, ({ one }) => ({
@@ -92,4 +129,14 @@ export const projectCollaboratorsRelations = relations(projectCollaborators, ({ 
 export const projectCliTokensRelations = relations(projectCliTokens, ({ one }) => ({
   project: one(projects, { fields: [projectCliTokens.projectId], references: [projects.id] }),
   user: one(users, { fields: [projectCliTokens.userId], references: [users.id] }),
+}));
+
+export const projectCommentsRelations = relations(projectComments, ({ one }) => ({
+  project: one(projects, { fields: [projectComments.projectId], references: [projects.id] }),
+  author: one(users, { fields: [projectComments.authorId], references: [users.id] }),
+}));
+
+export const projectInvitesRelations = relations(projectInvites, ({ one }) => ({
+  project: one(projects, { fields: [projectInvites.projectId], references: [projects.id] }),
+  creator: one(users, { fields: [projectInvites.createdBy], references: [users.id] }),
 }));

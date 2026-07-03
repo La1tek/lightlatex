@@ -37,6 +37,14 @@ const App = {
       } else {
         Admin.init();
       }
+    } else if (hash.startsWith('/invite/')) {
+      const token = decodeURIComponent(hash.slice('/invite/'.length));
+      localStorage.setItem('pendingProjectInvite', token);
+      if (!api.isAuthenticated) {
+        Auth.render(app);
+      } else {
+        this.acceptProjectInvite(token);
+      }
     } else if (hash.startsWith('/project/')) {
       const projectId = hash.split('/')[2];
       this.showEditor(app, projectId);
@@ -454,6 +462,14 @@ const App = {
 
   async showSearchModal() {
     return LightTeXFeatures.searchModal.show(this);
+  },
+
+  showCommentsModal() {
+    return LightTeXFeatures.collaborationCenter.showComments(this);
+  },
+
+  acceptProjectInvite(token) {
+    return LightTeXFeatures.collaborationCenter.acceptInvite(this, token);
   }
 };
 

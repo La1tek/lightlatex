@@ -107,12 +107,45 @@ async function main() {
   assert(collaborators.owner?.email === email, 'Collaborator owner email mismatch');
   assert(Array.isArray(collaborators.collaborators), 'Collaborators list missing');
 
+  const ownerComment = await request('POST', `/projects/${project.id}/comments`, {
+    filePath: 'main.tex',
+    lineNumber: 3,
+    body: 'Check introduction wording.',
+  });
+  assert(ownerComment.filePath === 'main.tex', 'Comment file path mismatch');
+  const openComments = await request('GET', `/projects/${project.id}/comments?filePath=main.tex`);
+  assert(openComments.some((comment) => comment.id === ownerComment.id && comment.authorEmail === email), 'Created comment missing from comments list');
+  const resolvedComment = await request('POST', `/projects/${project.id}/comments/${ownerComment.id}/resolve`, { resolved: true });
+  assert(resolvedComment.resolved === true, 'Comment did not resolve');
+
   const collaboratorAuth = await request('POST', '/auth/register', {
     email: collaboratorEmail,
     password,
     name: 'Smoke Collaborator',
   }, '');
   assert(collaboratorAuth.user?.email === collaboratorEmail, 'Collaborator registration email mismatch');
+
+  const invite = await request('POST', `/projects/${project.id}/invites`, {
+    role: 'editor',
+    expiresInDays: 7,
+    maxUses: 3,
+  });
+  assert(invite.token?.startsWith('lti_'), 'Invite token missing or malformed');
+  const inviteList = await request('GET', `/projects/${project.id}/invites`);
+  assert(inviteList.some((item) => item.id === invite.id && item.tokenPrefix === invite.tokenPrefix), 'Invite missing from invite list');
+  const acceptedInvite = await request('POST', '/projects/invites/accept', { token: invite.token }, collaboratorAuth.accessToken);
+  assert(acceptedInvite.projectId === project.id && acceptedInvite.role === 'editor', 'Invite accept returned wrong project or role');
+  const sharedAfterInvite = await request('GET', '/projects', undefined, collaboratorAuth.accessToken);
+  assert(sharedAfterInvite.some((item) => item.id === project.id && item.accessRole === 'editor'), 'Accepted invite did not grant editor access');
+  await request('DELETE', `/projects/${project.id}/invites/${invite.id}`);
+
+  const collaboratorComment = await request('POST', `/projects/${project.id}/comments`, {
+    filePath: 'main.tex',
+    lineNumber: 5,
+    body: 'Viewer/editor can leave review notes.',
+  }, collaboratorAuth.accessToken);
+  assert(collaboratorComment.body.includes('review notes'), 'Collaborator comment was not created');
+  await request('DELETE', `/projects/${project.id}/comments/${collaboratorComment.id}`, undefined, collaboratorAuth.accessToken);
 
   const addedCollaborator = await request('POST', `/projects/${project.id}/collaborators`, {
     email: collaboratorEmail,
