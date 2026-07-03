@@ -5,6 +5,15 @@
     return mode === 'editor' ? 'Editor only' : mode === 'pdf' ? 'PDF only' : 'Split';
   }
 
+  function setActionButtonLabel(button, icon, label) {
+    if (!button) return;
+    if (button.classList.contains('editor-more-item')) {
+      button.innerHTML = `${icon}<span>${label}</span>`;
+    } else {
+      button.innerHTML = `${icon} ${label}`;
+    }
+  }
+
   function setMode(app, mode, options = {}) {
     const nextMode = ['split', 'editor', 'pdf'].includes(mode) ? mode : 'split';
     app.workspaceMode = nextMode;
@@ -23,7 +32,7 @@
     if (previewPane) previewPane.classList.toggle('hidden', nextMode === 'editor');
     if (editorPane) editorPane.classList.toggle('hidden', nextMode === 'pdf');
     if (layoutBtn) {
-      layoutBtn.innerHTML = `${Icons.layout16} ${modeLabel(nextMode)}`;
+      setActionButtonLabel(layoutBtn, Icons.layout16, modeLabel(nextMode));
       layoutBtn.classList.toggle('active', nextMode !== 'split');
     }
     if (previewToggle) previewToggle.classList.toggle('active', nextMode !== 'editor');
@@ -49,7 +58,7 @@
     if (layout) layout.classList.toggle('focus-mode', app.focusMode);
     if (button) {
       button.classList.toggle('active', app.focusMode);
-      button.innerHTML = `${Icons.focus16} ${app.focusMode ? 'Exit focus' : 'Focus'}`;
+      setActionButtonLabel(button, Icons.focus16, app.focusMode ? 'Exit focus' : 'Focus');
     }
   }
 
