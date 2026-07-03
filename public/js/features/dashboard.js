@@ -81,6 +81,7 @@
     try {
       const projects = await api.get('/projects');
       const list = document.getElementById('projects-list');
+      if (!list) return;
       const searchInput = document.getElementById('project-search');
       const gridBtn = document.getElementById('grid-view-btn');
       const listBtn = document.getElementById('list-view-btn');
@@ -180,7 +181,9 @@
       });
       renderProjects();
     } catch (err) {
-      document.getElementById('projects-list').innerHTML = `
+      const list = document.getElementById('projects-list');
+      if (!list) return;
+      list.innerHTML = `
         <div class="empty-state">
           <div class="icon">${Icons.xCircle}</div>
           <p>Failed to load projects: ${app.escapeHtml(err.message)}</p>
