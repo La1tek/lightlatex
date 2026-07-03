@@ -508,124 +508,15 @@ const App = {
   },
 
   async openFile(path) {
-    try {
-      const content = await fetch(`/api/projects/${this.currentProjectId}/files/${path}`, {
-        headers: { 'Authorization': `Bearer ${api.token}` },
-      }).then(r => r.text());
-
-      Editor.setContext(this.currentProjectId, path);
-      Editor.setValue(content, { silent: true });
-      const currentFileTab = document.getElementById('current-file-tab');
-      if (currentFileTab) {
-        currentFileTab.innerHTML = `${Icons.fileTex} ${this.escapeHtml(path)}`;
-      }
-      const saveState = document.getElementById('save-state');
-      if (saveState) saveState.textContent = 'Saved';
-      this.fileTree.selectFile(path);
-      Editor.setCompileErrors([], path);
-      this.updateWordCount();
-      this.queueStructureRefresh();
-    } catch (err) {
-      console.error('Failed to open file:', err);
-    }
+    return LightTeXFeatures.fileActions.openFile(this, path);
   },
 
   async promptNewFile() {
-    if (!this.ensureCanEdit('create files')) return;
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-      <div class="modal">
-        <h2>New File</h2>
-        <form id="new-file-form">
-          <div class="form-group">
-            <label for="new-file-path">File path</label>
-            <input id="new-file-path" type="text" placeholder="chapters/intro.tex" autocomplete="off" required>
-            <div class="field-error" id="new-file-error" role="alert"></div>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-secondary" type="button" id="new-file-cancel">Cancel</button>
-            <button class="btn btn-primary" type="submit" id="new-file-submit">Create</button>
-          </div>
-        </form>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    const close = () => overlay.remove();
-    const pathInput = overlay.querySelector('#new-file-path');
-    const errorEl = overlay.querySelector('#new-file-error');
-    const submitBtn = overlay.querySelector('#new-file-submit');
-
-    overlay.querySelector('#new-file-cancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-    overlay.querySelector('#new-file-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const filePath = pathInput.value.trim();
-      errorEl.textContent = '';
-
-      if (!filePath) {
-        errorEl.textContent = 'File path is required.';
-        return;
-      }
-      if (filePath.startsWith('/') || filePath.split(/[\\/]+/).includes('..')) {
-        errorEl.textContent = 'Use a project-relative path.';
-        return;
-      }
-      if (this.projectFiles.some(f => f.path === filePath)) {
-        errorEl.textContent = 'File already exists.';
-        return;
-      }
-
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = `${Icons.clock14} Creating...`;
-      try {
-        const file = await api.post(`/projects/${this.currentProjectId}/files`, {
-          path: filePath,
-          content: filePath.endsWith('.tex')
-            ? `% ${filePath}\n`
-            : '',
-        });
-        this.projectFiles.push(file);
-        this.fileTree.setFiles(this.projectFiles);
-        this.refreshFileHashes();
-        this.openFile(filePath);
-        if (filePath.endsWith('.bib')) this.refreshCitationCache();
-        close();
-      } catch (err) {
-        errorEl.textContent = 'Failed to create file: ' + err.message;
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = 'Create';
-      }
-    });
-
-    pathInput.focus();
+    return LightTeXFeatures.fileActions.promptNewFile(this);
   },
 
   async deleteFile(path) {
-    if (!this.ensureCanEdit('delete files')) return;
-    if (!confirm(`Delete "${path}"?`)) return;
-
-    try {
-      await api.del(`/projects/${this.currentProjectId}/files/${path}`);
-      this.projectFiles = this.projectFiles.filter(f => f.path !== path);
-      this.fileTree.setFiles(this.projectFiles);
-      this.refreshFileHashes();
-
-      if (this.fileTree.selectedPath === path) {
-        if (this.projectFiles.length > 0) {
-          this.openFile(this.projectFiles[0].path);
-        } else {
-          Editor.setValue('', { silent: true });
-          Editor.setContext(null, null);
-        }
-      }
-      if (path.endsWith('.bib')) this.refreshCitationCache();
-    } catch (err) {
-      alert('Failed to delete file: ' + err.message);
-    }
+    return LightTeXFeatures.fileActions.deleteFile(this, path);
   },
 
   async compile() {
@@ -809,25 +700,11 @@ const App = {
   },
 
   async downloadPdf() {
-    try {
-      const blob = await api.download(`/projects/${this.currentProjectId}/output.pdf`);
-      if (blob.size < 100) {
-        this.notify('No PDF yet. Compile first.', 'error');
-        return;
-      }
-      LightTeXCore.dom.downloadBlob(blob, 'document.pdf');
-    } catch (err) {
-      this.notify('Download failed: ' + err.message, 'error');
-    }
+    return LightTeXFeatures.fileActions.downloadPdf(this);
   },
 
   async downloadProject() {
-    try {
-      const blob = await api.download(`/projects/${this.currentProjectId}/download`);
-      LightTeXCore.dom.downloadBlob(blob, 'project.zip');
-    } catch (err) {
-      this.notify('Download failed: ' + err.message, 'error');
-    }
+    return LightTeXFeatures.fileActions.downloadProject(this);
   },
 
   toggleTheme() {
@@ -845,34 +722,11 @@ const App = {
   },
 
   async refreshFileHashes() {
-    if (!this.currentProjectId) return [];
-    try {
-      this.fileHashes = await api.get(`/projects/${this.currentProjectId}/files-with-hashes`);
-      if (this.fileTree) {
-        this.fileTree.setHashes(this.fileHashes);
-        this.fileTree.setDevMode(this.devMode);
-      }
-      this.updateSyncStatus('synced');
-      return this.fileHashes;
-    } catch (err) {
-      this.updateSyncStatus('error');
-      return this.fileHashes || [];
-    }
+    return LightTeXFeatures.fileActions.refreshFileHashes(this);
   },
 
   updateSyncStatus(state, detail) {
-    this.syncState = state;
-    const button = document.getElementById('sync-status-btn');
-    if (!button) return;
-    const labels = {
-      synced: 'Synced',
-      local: 'Local changes',
-      conflicts: `Conflicts${this.syncConflicts.length ? ` (${this.syncConflicts.length})` : ''}`,
-      error: 'Sync error',
-    };
-    button.className = `sync-status ${state}`;
-    button.innerHTML = `${Icons.sync16} ${labels[state] || 'Sync'}`;
-    button.title = detail || 'CLI sync status';
+    return LightTeXFeatures.fileActions.updateSyncStatus(this, state, detail);
   },
 
   formatHash(hash) {
@@ -904,14 +758,7 @@ const App = {
   },
 
   async readProjectTextFile(filePath) {
-    if (filePath === Editor.currentFilePath) {
-      return Editor.getValue();
-    }
-    const headers = { 'Authorization': 'Bearer ' + api.token };
-    const safePath = this.encodeProjectPath(filePath);
-    const res = await fetch('/api/projects/' + this.currentProjectId + '/files/' + safePath, { headers });
-    if (!res.ok) throw new Error('Could not read ' + filePath);
-    return res.text();
+    return LightTeXFeatures.fileActions.readProjectTextFile(this, filePath);
   },
 
   encodeProjectPath(filePath) {
@@ -1505,71 +1352,11 @@ const App = {
   },
 
   async renameFile(oldPath, newPath) {
-    if (!this.ensureCanEdit('rename files')) return;
-    if (!newPath) {
-      this.showRenameFileModal(oldPath);
-      return;
-    }
-    try {
-      await api.put(`/projects/${this.currentProjectId}/files/rename`, { oldPath, newPath });
-      this.notify(`Renamed ${oldPath} → ${newPath}`, 'success');
-      this.projectFiles = await api.get(`/projects/${this.currentProjectId}/files`);
-      this.fileTree.setFiles(this.projectFiles);
-      this.refreshFileHashes();
-      if (Editor.currentFilePath === oldPath) {
-        this.openFile(newPath);
-      }
-      if (oldPath.endsWith('.bib') || newPath.endsWith('.bib')) this.refreshCitationCache();
-    } catch (err) {
-      this.notify('Rename failed: ' + err.message, 'error');
-    }
+    return LightTeXFeatures.fileActions.renameFile(this, oldPath, newPath);
   },
 
   showRenameFileModal(oldPath) {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-      <div class="modal">
-        <h2>Rename File</h2>
-        <form id="rename-file-form">
-          <div class="form-group">
-            <label for="rename-file-path">File path</label>
-            <input id="rename-file-path" type="text" value="${this.escapeHtml(oldPath)}" autocomplete="off" required>
-            <div class="field-error" id="rename-file-error" role="alert"></div>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-secondary" type="button" id="rename-file-cancel">Cancel</button>
-            <button class="btn btn-primary" type="submit">Rename</button>
-          </div>
-        </form>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    const close = () => overlay.remove();
-    const input = overlay.querySelector('#rename-file-path');
-    const error = overlay.querySelector('#rename-file-error');
-    overlay.querySelector('#rename-file-cancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-    overlay.querySelector('#rename-file-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const newPath = input.value.trim();
-      error.textContent = '';
-      if (!newPath) return error.textContent = 'File path is required.';
-      if (newPath === oldPath) return close();
-      if (newPath.startsWith('/') || newPath.split(/[\\/]+/).includes('..')) {
-        error.textContent = 'Use a project-relative path.';
-        return;
-      }
-      if (this.projectFiles.some(f => f.path === newPath)) {
-        error.textContent = 'File already exists.';
-        return;
-      }
-      await this.renameFile(oldPath, newPath);
-      close();
-    });
-    input.focus();
-    input.setSelectionRange(0, input.value.length);
+    return LightTeXFeatures.fileActions.showRenameFileModal(this, oldPath);
   },
 
   showProjectSettingsModal() {
