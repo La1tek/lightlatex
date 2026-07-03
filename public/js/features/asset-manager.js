@@ -118,8 +118,8 @@
           button.addEventListener('click', async () => {
             const asset = assets[parseInt(button.dataset.assetCopy, 10)];
             try {
-              if (!navigator.clipboard) throw new Error('Clipboard unavailable');
-              await navigator.clipboard.writeText(asset.path);
+              const copied = await LightTeXCore.clipboard.copyText(asset.path);
+              if (!copied) throw new Error('Clipboard unavailable');
               app.notify('Asset path copied', 'success');
             } catch {
               app.notify('Could not copy path automatically', 'error');

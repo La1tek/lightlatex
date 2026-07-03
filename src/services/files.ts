@@ -135,12 +135,22 @@ export async function uploadProjectAsset(projectId: string, userId: string, uplo
   const imagesDir = path.join(getProjectDir(projectId), "images");
   await ensureDir(imagesDir);
   const destPath = path.join(imagesDir, originalName);
-  await fs.rename(uploaded.path, destPath);
+  await moveUploadedFile(uploaded.path, destPath);
 
   const filePath = `images/${originalName}`;
   await upsertFileRecord(projectId, filePath);
 
   return { ok: true, path: filePath, name: originalName };
+}
+
+async function moveUploadedFile(sourcePath: string, destPath: string) {
+  try {
+    await fs.rename(sourcePath, destPath);
+  } catch (err: any) {
+    if (err?.code !== "EXDEV") throw err;
+    await fs.copyFile(sourcePath, destPath);
+    await fs.unlink(sourcePath).catch(() => {});
+  }
 }
 
 export async function listProjectAssets(projectId: string, userId: string) {

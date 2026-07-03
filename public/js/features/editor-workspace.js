@@ -257,8 +257,10 @@
     document.getElementById('pdf-fit-width').addEventListener('click', async () => { await Preview.setZoom('fit-width'); app.updatePdfPageInfo(); });
     document.getElementById('pdf-refresh').addEventListener('click', () => app.loadPdf());
     document.getElementById('pdf-copy-link').addEventListener('click', async () => {
+      const endpoint = `${window.location.origin}/api/projects/${app.currentProjectId}/output.pdf`;
       try {
-        await navigator.clipboard?.writeText(`${window.location.origin}/api/projects/${app.currentProjectId}/output.pdf`);
+        const copied = await LightTeXCore.clipboard.copyText(endpoint);
+        if (!copied) throw new Error('Clipboard unavailable');
         app.notify('PDF endpoint copied', 'success');
       } catch {
         app.notify('Could not copy PDF endpoint automatically', 'error');

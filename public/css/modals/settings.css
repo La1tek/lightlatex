@@ -93,21 +93,26 @@
 }
 
 .copy-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-8);
+  min-width: 0;
 }
 
 .copy-row code {
   min-width: 0;
-  flex: 1;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   padding: var(--space-8);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-4);
   color: var(--text-primary);
   background: var(--bg-editor);
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  line-height: 1.45;
 }
 
 .cli-token-box {
@@ -140,4 +145,12 @@
 .cli-command-row span {
   color: var(--text-muted);
   font-weight: 650;
+}
+
+.cli-command-row code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
 }

@@ -11,6 +11,7 @@ const APP_SCRIPTS = [
   '/js/editor.js',
   '/js/preview.js',
   '/js/core/dom.js',
+  '/js/core/clipboard.js',
   '/js/core/modal.js',
   '/js/core/notify.js',
   '/js/core/permissions.js',

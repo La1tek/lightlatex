@@ -77,8 +77,8 @@
     overlay.querySelectorAll('[data-copy-sync]').forEach((button) => {
       button.addEventListener('click', async () => {
         try {
-          if (!navigator.clipboard) throw new Error('Clipboard unavailable');
-          await navigator.clipboard.writeText(button.dataset.copySync);
+          const copied = await LightTeXCore.clipboard.copyText(button.dataset.copySync);
+          if (!copied) throw new Error('Clipboard unavailable');
           app.notify('CLI command copied', 'success');
         } catch {
           app.notify('Could not copy command automatically', 'error');

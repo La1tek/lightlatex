@@ -184,8 +184,8 @@
         button.addEventListener('click', async () => {
           const entry = filtered[parseInt(button.dataset.citationCopy, 10)];
           try {
-            if (!navigator.clipboard) throw new Error('Clipboard unavailable');
-            await navigator.clipboard.writeText(entry.key);
+            const copied = await LightTeXCore.clipboard.copyText(entry.key);
+            if (!copied) throw new Error('Clipboard unavailable');
             app.notify('Citation key copied', 'success');
           } catch {
             app.notify('Could not copy key automatically', 'error');

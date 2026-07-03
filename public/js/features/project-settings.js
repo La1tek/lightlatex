@@ -105,7 +105,8 @@
     LightTeXCore.modal.bindOverlayClose(overlay, close, '#settings-cancel');
     overlay.querySelector('#copy-cli-command').addEventListener('click', async () => {
       try {
-        await navigator.clipboard?.writeText(`lighttex pull ${app.currentProjectId}`);
+        const copied = await LightTeXCore.clipboard.copyText(`lighttex pull ${app.currentProjectId}`);
+        if (!copied) throw new Error('Clipboard unavailable');
         app.notify('CLI command copied', 'success');
       } catch {
         app.notify('Could not copy command automatically', 'error');
@@ -148,7 +149,8 @@
           if (copyToken) {
             copyToken.addEventListener('click', async () => {
               try {
-                await navigator.clipboard?.writeText(revealedToken);
+                const copied = await LightTeXCore.clipboard.copyText(revealedToken);
+                if (!copied) throw new Error('Clipboard unavailable');
                 app.notify('CLI token copied', 'success');
               } catch {
                 app.notify('Could not copy token automatically', 'error');
@@ -249,7 +251,8 @@
           `;
           reveal.querySelector('#copy-invite-link').addEventListener('click', async () => {
             try {
-              await navigator.clipboard?.writeText(url);
+              const copied = await LightTeXCore.clipboard.copyText(url);
+              if (!copied) throw new Error('Clipboard unavailable');
               app.notify('Invite link copied', 'success');
             } catch {
               app.notify('Could not copy invite link automatically', 'error');

@@ -30,30 +30,35 @@
   width: min(420px, calc(100vw - 40px));
   padding: var(--space-12) var(--space-16);
   border: 1px solid var(--border-color);
+  border-left-width: 3px;
   border-radius: var(--radius-8);
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
   color: var(--text-primary);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
   font-size: var(--text-13);
+  line-height: 1.45;
   animation: toastIn var(--duration-panel) var(--ease-enter);
   white-space: pre-line;
 }
 
 .notification.error {
   border-color: color-mix(in srgb, var(--error) 42%, var(--border-color));
-  background: var(--error-soft);
+  border-left-color: var(--error);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, var(--error-soft));
   color: var(--error);
 }
 
 .notification.success {
   border-color: color-mix(in srgb, var(--success) 42%, var(--border-color));
-  background: var(--success-soft);
+  border-left-color: var(--success);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, var(--success-soft));
   color: var(--success);
 }
 
 .notification.info {
   border-color: color-mix(in srgb, var(--info) 42%, var(--border-color));
-  background: var(--info-soft);
+  border-left-color: var(--info);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, var(--info-soft));
   color: var(--info);
 }
 
