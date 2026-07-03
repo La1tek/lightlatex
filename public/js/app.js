@@ -520,79 +520,7 @@ const App = {
   },
 
   async compile() {
-    if (!this.ensureCanEdit('compile this project')) return;
-    if (this.isCompiling) return;
-    this.isCompiling = true;
-
-    const statusEl = document.getElementById('compile-status');
-    const compileBtn = document.getElementById('compile-btn');
-    statusEl.innerHTML = `${Icons.clock14} Compiling...`;
-    statusEl.className = 'compile-status compiling';
-    this.lastCompileErrors = [];
-    if (compileBtn) {
-      compileBtn.disabled = true;
-      compileBtn.innerHTML = `${Icons.clock14} Compiling...`;
-    }
-
-    try {
-      if (Editor.currentFilePath) {
-        await Editor.autosave();
-      }
-
-      const result = await api.post(`/projects/${this.currentProjectId}/compile`);
-      const issues = Array.isArray(result.errors) ? result.errors : [];
-      const errors = issues.filter((e) => e.severity !== 'warning');
-      const warnings = issues.filter((e) => e.severity === 'warning');
-      this.lastCompileErrors = issues;
-      this.compileLog = result.log || '';
-      this.renderCompilePanel('issues');
-
-      if (result.success && result.pdfGenerated) {
-        if (warnings.length > 0) {
-          statusEl.innerHTML = `${Icons.xCircle14} Compiled with ${warnings.length} warning(s)`;
-          statusEl.className = 'compile-status warning';
-          Editor.setCompileErrors(issues, Editor.currentFilePath);
-          this.notify(`Compiled with ${warnings.length} warning(s)`, 'info');
-          this.openCompilePanel();
-        } else {
-          statusEl.innerHTML = `${Icons.check14} Compiled just now`;
-          statusEl.className = 'compile-status success';
-          Editor.setCompileErrors([], Editor.currentFilePath);
-          this.notify('Compilation successful!', 'success');
-        }
-        this.loadPdf();
-      } else {
-        statusEl.innerHTML = `${Icons.xCircle14} Failed: ${errors.length || issues.length} error(s)`;
-        statusEl.className = 'compile-status error';
-        if (issues.length > 0) {
-          Editor.setCompileErrors(issues, Editor.currentFilePath);
-          const msgs = issues.slice(0, 5).map(e => `Line ${e.line}: ${e.message}`).join('\n');
-          this.notify('Compilation failed:\n' + msgs, 'error');
-          this.openCompilePanel();
-        } else {
-          this.notify('Compilation failed', 'error');
-          this.openCompilePanel();
-        }
-      }
-
-      this.projectFiles = await api.get(`/projects/${this.currentProjectId}/files`);
-      this.fileTree.setFiles(this.projectFiles);
-      this.refreshFileHashes();
-    } catch (err) {
-      statusEl.innerHTML = `${Icons.xCircle14} Error`;
-      statusEl.className = 'compile-status error';
-      this.lastCompileErrors = [{ line: 0, message: err.message, severity: 'error' }];
-      this.compileLog = err.message;
-      this.renderCompilePanel('issues');
-      this.openCompilePanel();
-      this.notify('Compilation error: ' + err.message, 'error');
-    } finally {
-      this.isCompiling = false;
-      if (compileBtn) {
-        compileBtn.disabled = false;
-        compileBtn.innerHTML = `${Icons.play16} Compile`;
-      }
-    }
+    return LightTeXFeatures.compilePanel.compile(this);
   },
 
   showCompileErrorsModal() {
@@ -600,75 +528,23 @@ const App = {
   },
 
   openCompilePanel() {
-    this.logsPanelVisible = true;
-    const panel = document.getElementById('compile-panel');
-    if (panel) panel.classList.remove('hidden');
-    this.renderCompilePanel(document.querySelector('[data-log-tab].active')?.dataset.logTab || 'issues');
+    return LightTeXFeatures.compilePanel.openCompilePanel(this);
   },
 
   closeCompilePanel() {
-    this.logsPanelVisible = false;
-    const panel = document.getElementById('compile-panel');
-    if (panel) panel.classList.add('hidden');
+    return LightTeXFeatures.compilePanel.closeCompilePanel(this);
   },
 
   renderCompilePanel(tab = 'issues') {
-    const body = document.getElementById('compile-panel-body');
-    if (!body) return;
-    const issues = this.lastCompileErrors || [];
-    if (tab === 'raw') {
-      body.innerHTML = this.compileLog
-        ? `<pre class="raw-log">${this.escapeHtml(this.compileLog)}</pre>`
-        : `<div class="empty-state"><p>No raw log for the current run.</p></div>`;
-      return;
-    }
-
-    body.innerHTML = issues.length === 0 ? `
-      <div class="empty-state">
-        <div class="icon">${Icons.check}</div>
-        <p>No compile issues for the current run.</p>
-      </div>
-    ` : `
-      <div class="log-list">
-        ${issues.map((issue, index) => `
-          <button class="log-row ${issue.severity === 'warning' ? 'warning' : 'error'}" data-index="${index}" type="button">
-            <span class="log-severity">${issue.severity === 'warning' ? 'Warning' : 'Error'}</span>
-            <span class="log-line">Line ${issue.line || 0}</span>
-            <span class="log-message">${this.escapeHtml(issue.message || 'Unknown compile issue')}</span>
-          </button>
-        `).join('')}
-      </div>
-    `;
-    body.querySelectorAll('.log-row').forEach((row) => {
-      row.addEventListener('click', () => {
-        const issue = issues[parseInt(row.dataset.index, 10)];
-        if (issue && issue.line) {
-          Editor.revealLine(issue.line);
-        }
-      });
-    });
+    return LightTeXFeatures.compilePanel.renderCompilePanel(this, tab);
   },
 
   async loadPdf() {
-    try {
-      await Preview.loadPdf(this.currentProjectId);
-      this.updatePdfPageInfo();
-    } catch {
-      // No PDF yet
-    }
+    return LightTeXFeatures.compilePanel.loadPdf(this);
   },
 
   updatePdfPageInfo() {
-    const info = document.getElementById('pdf-page-info');
-    const num = document.getElementById('pdf-page-num');
-    const zoom = document.getElementById('pdf-zoom-label');
-    if (info && num) {
-      const total = pdfDoc ? pdfDoc.numPages : 0;
-      const current = total > 0 ? currentPage : 0;
-      info.textContent = 'PDF Preview';
-      num.textContent = total > 0 ? `${current} / ${total}` : '';
-    }
-    if (zoom) zoom.textContent = Preview.getZoomLabel();
+    return LightTeXFeatures.compilePanel.updatePdfPageInfo(this);
   },
 
   workspaceModeLabel(mode = this.workspaceMode) {
@@ -1336,19 +1212,7 @@ const App = {
   },
 
   updateWordCount() {
-    const content = Editor.getValue();
-    const text = content
-      .replace(/\\\\[a-zA-Z]+/g, ' ')
-      .replace(/[%].*/g, '')
-      .replace(/[{}\\]/g, ' ')
-      .replace(/\\\\begin\\{[^}]*\\}/g, '')
-      .replace(/\\\\end\\{[^}]*\\}/g, '')
-      .replace(/\s+/g, ' ');
-    const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
-    const chars = content.length;
-    const pages = Math.max(1, Math.round(words / 300));
-    const el = document.getElementById('word-count');
-    if (el) el.textContent = 'Words: ' + words + ' | Chars: ' + chars + ' | ~Pages: ' + pages;
+    return LightTeXFeatures.compilePanel.updateWordCount(this);
   },
 
   async renameFile(oldPath, newPath) {
