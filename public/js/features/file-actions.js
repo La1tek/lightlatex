@@ -16,6 +16,8 @@
       const saveState = document.getElementById('save-state');
       if (saveState) saveState.textContent = 'Saved';
       app.fileTree.selectFile(path);
+      recordRecentFile(app, path);
+      renderRecentFiles(app);
       Editor.setCompileErrors([], path);
       app.updateWordCount();
       app.queueStructureRefresh();
@@ -93,6 +95,48 @@
     });
 
     pathInput.focus();
+  }
+
+  function recentKey(app) {
+    return `lighttex-recent-files:${app.currentProjectId}`;
+  }
+
+  function getRecentFiles(app) {
+    try {
+      const existing = JSON.parse(localStorage.getItem(recentKey(app)) || '[]');
+      const available = new Set((app.projectFiles || []).map((file) => file.path));
+      return existing.filter((path) => available.has(path)).slice(0, 6);
+    } catch {
+      return [];
+    }
+  }
+
+  function recordRecentFile(app, path) {
+    const recent = [path, ...getRecentFiles(app).filter((item) => item !== path)].slice(0, 6);
+    localStorage.setItem(recentKey(app), JSON.stringify(recent));
+  }
+
+  function renderRecentFiles(app) {
+    const panel = document.getElementById('recent-files-panel');
+    if (!panel || !app.currentProjectId) return;
+    const recent = getRecentFiles(app);
+    if (recent.length === 0) {
+      panel.innerHTML = '';
+      return;
+    }
+    panel.innerHTML = `
+      <div class="recent-files-title">RECENT</div>
+      <div class="recent-files-list">
+        ${recent.map((path) => `
+          <button class="recent-file-btn ${path === Editor.currentFilePath ? 'active' : ''}" type="button" data-recent-file="${app.escapeHtml(path)}" title="${app.escapeHtml(path)}">
+            ${Icons.fileTex} <span>${app.escapeHtml(path)}</span>
+          </button>
+        `).join('')}
+      </div>
+    `;
+    panel.querySelectorAll('[data-recent-file]').forEach((button) => {
+      button.addEventListener('click', () => app.openFile(button.dataset.recentFile));
+    });
   }
 
   async function deleteFile(app, path) {
@@ -255,6 +299,7 @@
     openFile,
     promptNewFile,
     readProjectTextFile,
+    renderRecentFiles,
     refreshFileHashes,
     renameFile,
     showRenameFileModal,

@@ -259,3 +259,31 @@ th {
 td {
   color: var(--text-primary);
 }
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-13);
+}
+
+.admin-table th,
+.admin-table td {
+  padding: var(--space-8);
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table code {
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  color: var(--accent);
+}
+
+.audit-metadata {
+  max-width: 360px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  overflow-wrap: anywhere;
+}

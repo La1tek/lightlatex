@@ -3,7 +3,9 @@ import { register, login, refreshTokens, logout } from "../auth/service";
 import { AuthRequest, authMiddleware } from "../auth/middleware";
 import { db } from "../db";
 import { users } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
+import { config } from "../config";
+import { logAuditEvent } from "../services/audit";
 
 const router = Router();
 
@@ -12,8 +14,23 @@ router.post("/register", async (req: Request, res: Response) => {
     const { email, password, name } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password required" });
     if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+    const registrationMode = config.auth.registrationMode;
+    if (registrationMode === "closed") {
+      return res.status(403).json({ error: "Registration is disabled on this server" });
+    }
+    if (registrationMode === "first-user") {
+      const userCount = (await db.select({ count: count() }).from(users))[0].count;
+      if (userCount > 0) return res.status(403).json({ error: "Registration is limited to the first user" });
+    }
 
     const result = await register(email, password, name);
+    await logAuditEvent({
+      userId: result.user.id,
+      action: "auth.register",
+      resourceType: "user",
+      resourceId: result.user.id,
+      metadata: { email: result.user.email },
+    });
     res.status(201).json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -26,6 +43,13 @@ router.post("/login", async (req: Request, res: Response) => {
     if (!email || !password) return res.status(400).json({ error: "Email and password required" });
 
     const result = await login(email, password);
+    await logAuditEvent({
+      userId: result.user.id,
+      action: "auth.login",
+      resourceType: "user",
+      resourceId: result.user.id,
+      metadata: { email: result.user.email },
+    });
     res.json(result);
   } catch (err: any) {
     res.status(401).json({ error: err.message });

@@ -87,6 +87,60 @@
   padding: var(--space-6) 0;
 }
 
+.recent-files-panel {
+  flex: 0 0 auto;
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  border-top: var(--panel-border);
+}
+
+.recent-files-title {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+  font-weight: 700;
+}
+
+.recent-files-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.recent-file-btn {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  padding: 0 var(--space-6);
+  border: 1px solid transparent;
+  border-radius: var(--radius-4);
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.recent-file-btn:hover,
+.recent-file-btn.active {
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.recent-file-btn svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+.recent-file-btn span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-12);
+}
+
 .tree-item {
   height: 28px;
   display: flex;

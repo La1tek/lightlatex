@@ -9,6 +9,7 @@ import { db } from "../db";
 import { files, projects, users } from "../db/schema";
 import { HttpError } from "../shared/errors";
 import { config } from "../config";
+import { listAuditEvents } from "./audit";
 
 const execFileAsync = promisify(execFile);
 
@@ -194,6 +195,7 @@ export async function getAdminHealth(userId: string) {
     compileTimeoutMs: config.quotas.compileTimeoutMs,
     maxUploadMB: Math.round(config.upload.maxZipBytes / (1024 * 1024)),
     maxImageUploadMB: Math.round(config.upload.maxImageBytes / (1024 * 1024)),
+    registrationMode: config.auth.registrationMode,
   };
 
   return {
@@ -213,6 +215,11 @@ export async function getAdminHealth(userId: string) {
       compileJobsToday: "not_tracked",
     },
   };
+}
+
+export async function listAdminAuditEvents(userId: string, limit?: number) {
+  await requireAdmin(userId);
+  return listAuditEvents(limit);
 }
 
 export async function listAdminUsers(userId: string) {

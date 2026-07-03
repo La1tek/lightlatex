@@ -78,6 +78,14 @@
               <code>lighttex pull ${app.currentProjectId}</code>
               <button class="btn btn-secondary btn-small" type="button" id="copy-cli-command">Copy</button>
             </div>
+            <div class="cli-command-list" aria-label="CLI sync commands">
+              ${['status', 'pull', 'sync', 'watch'].map((command) => `
+                <div class="cli-command-row">
+                  <span>${command}</span>
+                  <code>lighttex ${command} ${app.currentProjectId}</code>
+                </div>
+              `).join('')}
+            </div>
             ${canManage ? `
               <div class="cli-token-box" id="cli-token-box">
                 <div class="panel-loading">Loading CLI token...</div>

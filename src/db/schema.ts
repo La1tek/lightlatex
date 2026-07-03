@@ -101,11 +101,25 @@ export const sessions = pgTable("sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const auditLogs = pgTable("audit_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  action: varchar("action", { length: 80 }).notNull(),
+  resourceType: varchar("resource_type", { length: 80 }),
+  resourceId: varchar("resource_id", { length: 255 }),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_logs_created").on(table.createdAt),
+  index("idx_audit_logs_user").on(table.userId),
+]);
+
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),
   collaborations: many(projectCollaborators),
   comments: many(projectComments),
   projectInvites: many(projectInvites),
+  auditLogs: many(auditLogs),
 }));
 
 export const projectsRelations = relations(projects, ({ many, one }) => ({
@@ -139,4 +153,8 @@ export const projectCommentsRelations = relations(projectComments, ({ one }) => 
 export const projectInvitesRelations = relations(projectInvites, ({ one }) => ({
   project: one(projects, { fields: [projectInvites.projectId], references: [projects.id] }),
   creator: one(users, { fields: [projectInvites.createdBy], references: [users.id] }),
+}));
+
+export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
+  user: one(users, { fields: [auditLogs.userId], references: [users.id] }),
 }));

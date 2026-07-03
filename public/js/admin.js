@@ -20,6 +20,7 @@ const Admin = {
             <a class="active" href="#overview">Overview</a>
             <a href="#health">Health</a>
             <a href="#users">Users</a>
+            <a href="#audit">Audit</a>
             <a href="#backups">Backups</a>
             <a href="#settings">Settings</a>
           </nav>
@@ -48,6 +49,13 @@ const Admin = {
               <h2>Users</h2>
               <div id="admin-users"><div class="empty-state"><p>Loading...</p></div></div>
             </section>
+            <section class="admin-section" id="audit">
+              <div class="section-heading-row">
+                <h2>Audit</h2>
+                <button class="btn btn-secondary btn-small" id="audit-refresh">${Icons.clock14} Refresh</button>
+              </div>
+              <div id="admin-audit"><div class="empty-state"><p>Loading...</p></div></div>
+            </section>
             <section class="admin-section" id="backups">
               <h2>Backups</h2>
               <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -74,6 +82,7 @@ const Admin = {
 
     document.getElementById('backup-btn').addEventListener('click', () => this.backup());
     document.getElementById('health-refresh').addEventListener('click', () => this.loadHealth());
+    document.getElementById('audit-refresh').addEventListener('click', () => this.loadAudit());
     document.getElementById('restore-btn').addEventListener('click', () => {
       document.getElementById('restore-file').click();
     });
@@ -104,6 +113,7 @@ const Admin = {
     await this.loadStats();
     await this.loadHealth();
     await this.loadUsers();
+    await this.loadAudit();
   },
 
   escapeHtml(str) {
@@ -257,6 +267,45 @@ const Admin = {
       `;
     } catch (err) {
       el.innerHTML = `<div style="color:var(--error)">Failed to load health: ${this.escapeHtml(err.message)}</div>`;
+    }
+  },
+
+  async loadAudit() {
+    const el = document.getElementById('admin-audit');
+    try {
+      const events = await api.get('/admin/audit?limit=100');
+      if (!Array.isArray(events) || events.length === 0) {
+        el.innerHTML = '<div class="empty-state"><p>No audit events yet.</p></div>';
+        return;
+      }
+      el.innerHTML = `
+        <table class="admin-table">
+          <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Resource</th>
+            <th>Metadata</th>
+          </tr>
+          ${events.map((event) => {
+            let metadata = event.metadata || '';
+            try {
+              metadata = JSON.stringify(JSON.parse(metadata), null, 0);
+            } catch {}
+            return `
+              <tr>
+                <td>${this.escapeHtml(new Date(event.createdAt).toLocaleString())}</td>
+                <td>${this.escapeHtml(event.userEmail || event.userId || 'system')}</td>
+                <td><code>${this.escapeHtml(event.action)}</code></td>
+                <td>${this.escapeHtml([event.resourceType, event.resourceId].filter(Boolean).join(':') || '—')}</td>
+                <td class="audit-metadata">${this.escapeHtml(metadata || '—')}</td>
+              </tr>
+            `;
+          }).join('')}
+        </table>
+      `;
+    } catch (err) {
+      el.innerHTML = `<div style="color:var(--error)">Failed to load audit log: ${this.escapeHtml(err.message)}</div>`;
     }
   },
 

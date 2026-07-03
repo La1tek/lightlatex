@@ -34,6 +34,7 @@ import {
   listProjectInvites,
   revokeProjectInvite,
 } from "../services/invites";
+import { logAuditEvent } from "../services/audit";
 
 const router = Router();
 router.use(authMiddleware);
@@ -49,6 +50,13 @@ router.get("/", async (req: AuthRequest, res: Response) => {
 router.post("/", async (req: AuthRequest, res: Response) => {
   try {
     const project = await createProjectForUser(req.userId!, req.body);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "project.create",
+      resourceType: "project",
+      resourceId: project.id,
+      metadata: { name: project.name, compiler: project.compiler },
+    });
     res.status(201).json(project);
   } catch (err: any) {
     sendError(res, err);
@@ -57,7 +65,15 @@ router.post("/", async (req: AuthRequest, res: Response) => {
 
 router.post("/invites/accept", async (req: AuthRequest, res: Response) => {
   try {
-    res.json(await acceptProjectInvite(String(req.body?.token || ""), req.userId!));
+    const result = await acceptProjectInvite(String(req.body?.token || ""), req.userId!);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "invite.accept",
+      resourceType: "project",
+      resourceId: result.projectId,
+      metadata: { role: result.role },
+    });
+    res.json(result);
   } catch (err: any) {
     sendError(res, err);
   }
@@ -73,7 +89,15 @@ router.get("/:id", async (req: AuthRequest, res: Response) => {
 
 router.put("/:id", async (req: AuthRequest, res: Response) => {
   try {
-    res.json(await updateProjectForOwner(p(req, "id"), req.userId!, req.body));
+    const project = await updateProjectForOwner(p(req, "id"), req.userId!, req.body);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "project.update",
+      resourceType: "project",
+      resourceId: project.id,
+      metadata: { name: project.name, compiler: project.compiler, mainFile: project.mainFile },
+    });
+    res.json(project);
   } catch (err: any) {
     sendError(res, err);
   }
@@ -81,7 +105,14 @@ router.put("/:id", async (req: AuthRequest, res: Response) => {
 
 router.delete("/:id", async (req: AuthRequest, res: Response) => {
   try {
-    await deleteProjectForOwner(p(req, "id"), req.userId!);
+    const projectId = p(req, "id");
+    await deleteProjectForOwner(projectId, req.userId!);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "project.delete",
+      resourceType: "project",
+      resourceId: projectId,
+    });
     res.json({ ok: true });
   } catch (err: any) {
     sendError(res, err, 404);
@@ -106,7 +137,16 @@ router.get("/:id/cli-token", async (req: AuthRequest, res: Response) => {
 
 router.post("/:id/cli-token/regenerate", async (req: AuthRequest, res: Response) => {
   try {
-    res.status(201).json(await regenerateProjectCliToken(p(req, "id"), req.userId!));
+    const projectId = p(req, "id");
+    const token = await regenerateProjectCliToken(projectId, req.userId!);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "cli-token.regenerate",
+      resourceType: "project",
+      resourceId: projectId,
+      metadata: { tokenPrefix: token.tokenPrefix },
+    });
+    res.status(201).json(token);
   } catch (err: any) {
     sendError(res, err);
   }
@@ -114,7 +154,14 @@ router.post("/:id/cli-token/regenerate", async (req: AuthRequest, res: Response)
 
 router.delete("/:id/cli-token", async (req: AuthRequest, res: Response) => {
   try {
-    await revokeProjectCliToken(p(req, "id"), req.userId!);
+    const projectId = p(req, "id");
+    await revokeProjectCliToken(projectId, req.userId!);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "cli-token.revoke",
+      resourceType: "project",
+      resourceId: projectId,
+    });
     res.json({ ok: true });
   } catch (err: any) {
     sendError(res, err, 404);
@@ -134,7 +181,16 @@ router.get("/:id/comments", async (req: AuthRequest, res: Response) => {
 
 router.post("/:id/comments", async (req: AuthRequest, res: Response) => {
   try {
-    res.status(201).json(await createProjectComment(p(req, "id"), req.userId!, req.body));
+    const projectId = p(req, "id");
+    const comment = await createProjectComment(projectId, req.userId!, req.body);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "comment.create",
+      resourceType: "project",
+      resourceId: projectId,
+      metadata: { filePath: comment.filePath, lineNumber: comment.lineNumber },
+    });
+    res.status(201).json(comment);
   } catch (err: any) {
     sendError(res, err);
   }
@@ -180,7 +236,16 @@ router.get("/:id/invites", async (req: AuthRequest, res: Response) => {
 
 router.post("/:id/invites", async (req: AuthRequest, res: Response) => {
   try {
-    res.status(201).json(await createProjectInvite(p(req, "id"), req.userId!, req.body));
+    const projectId = p(req, "id");
+    const invite = await createProjectInvite(projectId, req.userId!, req.body);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "invite.create",
+      resourceType: "project",
+      resourceId: projectId,
+      metadata: { role: invite.role, tokenPrefix: invite.tokenPrefix, maxUses: invite.maxUses },
+    });
+    res.status(201).json(invite);
   } catch (err: any) {
     sendError(res, err);
   }
@@ -188,7 +253,16 @@ router.post("/:id/invites", async (req: AuthRequest, res: Response) => {
 
 router.delete("/:id/invites/:inviteId", async (req: AuthRequest, res: Response) => {
   try {
-    res.json(await revokeProjectInvite(p(req, "id"), req.userId!, String(req.params.inviteId)));
+    const projectId = p(req, "id");
+    const invite = await revokeProjectInvite(projectId, req.userId!, String(req.params.inviteId));
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "invite.revoke",
+      resourceType: "project",
+      resourceId: projectId,
+      metadata: { inviteId: invite.id },
+    });
+    res.json(invite);
   } catch (err: any) {
     sendError(res, err, 404);
   }

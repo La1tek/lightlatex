@@ -59,6 +59,7 @@
               <button class="sidebar-tab" data-tab="todo">${Icons.todo16} TODO</button>
             </div>
             <div class="tree-container" id="file-tree"></div>
+            <div class="recent-files-panel" id="recent-files-panel"></div>
             <div class="sidebar-panel" id="outline-panel" style="display:none">
               <div class="sidebar-header"><span>OUTLINE</span></div>
               <div class="panel-content" id="outline-content"></div>
@@ -152,6 +153,7 @@
       readOnly: !app.canEditProject(),
     });
     app.fileTree.setFiles(app.projectFiles);
+    LightTeXFeatures.fileActions.renderRecentFiles(app);
     app.refreshFileHashes();
 
     if (project.mainFile && app.projectFiles.some(f => f.path === project.mainFile)) {

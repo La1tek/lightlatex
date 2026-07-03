@@ -10,4 +10,7 @@ export const config = {
     storagePerUserMB: Number(process.env.STORAGE_QUOTA_MB || 0),
     compileTimeoutMs: Number(process.env.COMPILE_TIMEOUT_MS || 30000),
   },
+  auth: {
+    registrationMode: process.env.REGISTRATION_MODE || "open",
+  },
 };

@@ -9,9 +9,11 @@ import {
   deleteAdminUser,
   getAdminHealth,
   getAdminStats,
+  listAdminAuditEvents,
   listAdminUsers,
   restoreAdminBackup,
 } from "../services/admin";
+import { logAuditEvent } from "../services/audit";
 
 const router = Router();
 router.use(authMiddleware);
@@ -19,6 +21,14 @@ router.use(authMiddleware);
 router.get("/stats", async (req: AuthRequest, res: Response) => {
   try {
     res.json(await getAdminStats(req.userId!));
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+router.get("/audit", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await listAdminAuditEvents(req.userId!, Number(req.query.limit || 100)));
   } catch (err: any) {
     sendError(res, err);
   }
@@ -43,6 +53,12 @@ router.get("/users", async (req: AuthRequest, res: Response) => {
 router.delete("/users/:id", async (req: AuthRequest, res: Response) => {
   try {
     await deleteAdminUser(req.userId!, String(req.params.id));
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "admin.user.delete",
+      resourceType: "user",
+      resourceId: String(req.params.id),
+    });
     res.json({ ok: true });
   } catch (err: any) {
     sendError(res, err);
@@ -52,6 +68,12 @@ router.delete("/users/:id", async (req: AuthRequest, res: Response) => {
 router.post("/backup", async (req: AuthRequest, res: Response) => {
   try {
     const backup = await createAdminBackup(req.userId!);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "admin.backup.create",
+      resourceType: "backup",
+      resourceId: backup.timestamp,
+    });
     res.setHeader("Content-Type", "application/gzip");
     res.setHeader("Content-Disposition", `attachment; filename="lightlatex-backup-${backup.timestamp}.tar.gz"`);
     res.send(backup.content);
@@ -66,6 +88,12 @@ router.post("/restore", upload.single("backup"), async (req: AuthRequest, res: R
   try {
     if (!req.file) return res.status(400).json({ error: "No backup file uploaded" });
     await restoreAdminBackup(req.userId!, req.file.path);
+    await logAuditEvent({
+      userId: req.userId!,
+      action: "admin.backup.restore",
+      resourceType: "backup",
+      metadata: { originalName: req.file.originalname, size: req.file.size },
+    });
     await fs.unlink(req.file.path).catch(() => {});
     res.json({ ok: true, message: "Backup restored. Restart recommended." });
   } catch (err: any) {
