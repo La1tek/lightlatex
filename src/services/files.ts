@@ -167,6 +167,13 @@ export async function listProjectFilesWithHashes(projectId: string, userId: stri
   return result;
 }
 
+type ClientSyncFile = {
+  path: string;
+  content: string;
+  hash: string;
+  baseHash?: string;
+};
+
 export async function syncProjectFiles(projectId: string, userId: string, clientFiles: unknown) {
   await requireProjectAccess(projectId, userId, "editor");
   if (!Array.isArray(clientFiles)) throw new HttpError("Expected array of files", 400);
@@ -185,23 +192,58 @@ export async function syncProjectFiles(projectId: string, userId: string, client
 
   const pushed: string[] = [];
   const pulled: Array<{ path: string; hash: string; content: string }> = [];
-  const conflicts: string[] = [];
+  const conflicts: Array<{
+    path: string;
+    baseHash?: string;
+    localHash: string;
+    remoteHash: string;
+    localContent: string;
+    remoteContent: string;
+    serverUpdatedAt: Date;
+  }> = [];
 
-  for (const cf of clientFiles as Array<{ path: string; content: string; hash: string }>) {
+  for (const cf of clientFiles as ClientSyncFile[]) {
     const server = serverMap.get(cf.path);
     if (!server) {
       await writeFile(projectId, cf.path, cf.content);
       await upsertFileRecord(projectId, cf.path);
       pushed.push(cf.path);
     } else if (server.hash !== cf.hash) {
-      await writeFile(projectId, cf.path, cf.content);
-      await upsertFileRecord(projectId, cf.path);
-      conflicts.push(cf.path);
-      pushed.push(cf.path);
+      if (cf.baseHash && cf.baseHash !== server.hash) {
+        let remoteContent = "";
+        try {
+          remoteContent = await fs.readFile(resolveProjectPath(projectId, cf.path), "utf-8");
+        } catch {
+          // keep empty remote content for unreadable files
+        }
+        conflicts.push({
+          path: cf.path,
+          baseHash: cf.baseHash,
+          localHash: cf.hash,
+          remoteHash: server.hash,
+          localContent: cf.content,
+          remoteContent,
+          serverUpdatedAt: server.updatedAt,
+        });
+      } else {
+        await writeFile(projectId, cf.path, cf.content);
+        await upsertFileRecord(projectId, cf.path);
+        if (!cf.baseHash) {
+          conflicts.push({
+            path: cf.path,
+            localHash: cf.hash,
+            remoteHash: server.hash,
+            localContent: cf.content,
+            remoteContent: "",
+            serverUpdatedAt: server.updatedAt,
+          });
+        }
+        pushed.push(cf.path);
+      }
     }
   }
 
-  const clientPaths = new Set((clientFiles as Array<{ path: string }>).map(f => f.path));
+  const clientPaths = new Set((clientFiles as ClientSyncFile[]).map(f => f.path));
   for (const [sp, info] of serverMap) {
     if (!clientPaths.has(sp)) {
       try {

@@ -42,6 +42,17 @@ export async function bootstrapDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_project_collaborators_project ON project_collaborators(project_id);
     CREATE INDEX IF NOT EXISTS idx_project_collaborators_user ON project_collaborators(user_id);
+    CREATE TABLE IF NOT EXISTS project_cli_tokens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash VARCHAR(255) UNIQUE NOT NULL,
+      token_prefix VARCHAR(16) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      last_used_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_cli_tokens_project ON project_cli_tokens(project_id);
+    CREATE INDEX IF NOT EXISTS idx_project_cli_tokens_user ON project_cli_tokens(user_id);
     CREATE TABLE IF NOT EXISTS sessions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

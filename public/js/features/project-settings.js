@@ -62,6 +62,11 @@
               <code>lighttex pull ${app.currentProjectId}</code>
               <button class="btn btn-secondary btn-small" type="button" id="copy-cli-command">Copy</button>
             </div>
+            ${canManage ? `
+              <div class="cli-token-box" id="cli-token-box">
+                <div class="panel-loading">Loading CLI token...</div>
+              </div>
+            ` : ''}
           </div>
           <div class="field-error" id="settings-error" role="alert"></div>
           <div class="modal-actions">
@@ -83,6 +88,59 @@
       }
     });
     if (canManage) {
+      const renderCliToken = async (revealedToken) => {
+        const box = overlay.querySelector('#cli-token-box');
+        if (!box) return;
+        try {
+          const tokenMeta = await api.get(`/projects/${app.currentProjectId}/cli-token`);
+          box.innerHTML = `
+            <div class="settings-access-row">
+              <span>${tokenMeta ? `Token ${app.escapeHtml(tokenMeta.tokenPrefix)}...` : 'No CLI token generated'}</span>
+              <span>${tokenMeta?.lastUsedAt ? `Last used ${new Date(tokenMeta.lastUsedAt).toLocaleString()}` : 'Not used yet'}</span>
+            </div>
+            ${revealedToken ? `
+              <div class="copy-row">
+                <code>${app.escapeHtml(revealedToken)}</code>
+                <button class="btn btn-secondary btn-small" type="button" id="copy-cli-token">Copy token</button>
+              </div>
+            ` : ''}
+            <div class="settings-token-actions">
+              <button class="btn btn-secondary btn-small" type="button" id="regenerate-cli-token">${tokenMeta ? 'Regenerate token' : 'Generate token'}</button>
+              <button class="btn btn-danger btn-small" type="button" id="revoke-cli-token" ${tokenMeta ? '' : 'disabled'}>Revoke</button>
+            </div>
+          `;
+          box.querySelector('#regenerate-cli-token').addEventListener('click', async () => {
+            const payload = await api.post(`/projects/${app.currentProjectId}/cli-token/regenerate`, {});
+            app.notify('CLI token generated. Copy it now; it will not be shown again.', 'success');
+            renderCliToken(payload.token);
+          });
+          box.querySelector('#revoke-cli-token').addEventListener('click', async () => {
+            if (!confirm('Revoke CLI token for this project?')) return;
+            await api.del(`/projects/${app.currentProjectId}/cli-token`);
+            app.notify('CLI token revoked', 'success');
+            renderCliToken();
+          });
+          const copyToken = box.querySelector('#copy-cli-token');
+          if (copyToken) {
+            copyToken.addEventListener('click', async () => {
+              try {
+                await navigator.clipboard?.writeText(revealedToken);
+                app.notify('CLI token copied', 'success');
+              } catch {
+                app.notify('Could not copy token automatically', 'error');
+              }
+            });
+          }
+        } catch (err) {
+          box.innerHTML = `
+            <div class="panel-empty error">
+              <strong>Could not load CLI token</strong>
+              <span>${app.escapeHtml(err.message || 'Unknown token error')}</span>
+            </div>
+          `;
+        }
+      };
+
       const renderSharing = async () => {
         const list = overlay.querySelector('#share-list');
         list.innerHTML = '<div class="panel-loading">Loading collaborators...</div>';
@@ -172,6 +230,7 @@
         }
       });
       renderSharing();
+      renderCliToken();
     }
     overlay.querySelector('#project-settings-form').addEventListener('submit', async (e) => {
       e.preventDefault();

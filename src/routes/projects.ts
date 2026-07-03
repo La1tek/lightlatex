@@ -16,6 +16,11 @@ import {
   updateProjectCollaborator,
   upsertProjectCollaborator,
 } from "../services/collaborators";
+import {
+  getProjectCliToken,
+  regenerateProjectCliToken,
+  revokeProjectCliToken,
+} from "../services/cliTokens";
 
 const router = Router();
 router.use(authMiddleware);
@@ -65,6 +70,31 @@ router.delete("/:id", async (req: AuthRequest, res: Response) => {
 router.get("/:id/collaborators", async (req: AuthRequest, res: Response) => {
   try {
     res.json(await listProjectCollaborators(p(req, "id"), req.userId!));
+  } catch (err: any) {
+    sendError(res, err, 404);
+  }
+});
+
+router.get("/:id/cli-token", async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await getProjectCliToken(p(req, "id"), req.userId!));
+  } catch (err: any) {
+    sendError(res, err, 404);
+  }
+});
+
+router.post("/:id/cli-token/regenerate", async (req: AuthRequest, res: Response) => {
+  try {
+    res.status(201).json(await regenerateProjectCliToken(p(req, "id"), req.userId!));
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+router.delete("/:id/cli-token", async (req: AuthRequest, res: Response) => {
+  try {
+    await revokeProjectCliToken(p(req, "id"), req.userId!);
+    res.json({ ok: true });
   } catch (err: any) {
     sendError(res, err, 404);
   }

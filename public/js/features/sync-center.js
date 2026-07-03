@@ -106,16 +106,23 @@
           </div>
         ` : `
           <div class="conflict-list">
-            ${conflicts.map((file) => `
+            ${conflicts.map((conflict) => {
+              const file = typeof conflict === 'string' ? conflict : conflict.path;
+              const local = typeof conflict === 'string' ? 'Local changes pending from CLI client.' : conflict.localContent || '(local content unavailable)';
+              const remote = typeof conflict === 'string' ? 'Remote server version changed.' : conflict.remoteContent || '(remote content unavailable)';
+              const merged = typeof conflict === 'string'
+                ? `Resolve locally, then run lighttex push ${app.currentProjectId}.`
+                : `base ${app.formatHash(conflict.baseHash)} · local ${app.formatHash(conflict.localHash)} · remote ${app.formatHash(conflict.remoteHash)}`;
+              return `
               <article class="conflict-row">
                 <header>
                   <strong>${app.escapeHtml(file)}</strong>
                   <span>local / remote / merged</span>
                 </header>
                 <div class="conflict-columns">
-                  <pre>Local changes pending from CLI client.</pre>
-                  <pre>Remote server version changed.</pre>
-                  <pre>Resolve locally, then run lighttex push ${app.currentProjectId}.</pre>
+                  <pre>${app.escapeHtml(local)}</pre>
+                  <pre>${app.escapeHtml(remote)}</pre>
+                  <pre>${app.escapeHtml(merged)}</pre>
                 </div>
                 <div class="conflict-actions">
                   <button class="btn btn-secondary btn-small" type="button">Keep mine</button>
@@ -123,7 +130,7 @@
                   <button class="btn btn-primary btn-small" type="button">Mark merged</button>
                 </div>
               </article>
-            `).join('')}
+            `; }).join('')}
           </div>
         `}
       </div>

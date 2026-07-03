@@ -47,6 +47,19 @@ export const projectCollaborators = pgTable("project_collaborators", {
   unique("unique_project_collaborator").on(table.projectId, table.userId),
 ]);
 
+export const projectCliTokens = pgTable("project_cli_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: varchar("token_hash", { length: 255 }).notNull().unique(),
+  tokenPrefix: varchar("token_prefix", { length: 16 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+}, (table) => [
+  index("idx_project_cli_tokens_project").on(table.projectId),
+  index("idx_project_cli_tokens_user").on(table.userId),
+]);
+
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -64,6 +77,7 @@ export const projectsRelations = relations(projects, ({ many, one }) => ({
   user: one(users, { fields: [projects.userId], references: [users.id] }),
   files: many(files),
   collaborators: many(projectCollaborators),
+  cliTokens: many(projectCliTokens),
 }));
 
 export const filesRelations = relations(files, ({ one }) => ({
@@ -73,4 +87,9 @@ export const filesRelations = relations(files, ({ one }) => ({
 export const projectCollaboratorsRelations = relations(projectCollaborators, ({ one }) => ({
   project: one(projects, { fields: [projectCollaborators.projectId], references: [projects.id] }),
   user: one(users, { fields: [projectCollaborators.userId], references: [users.id] }),
+}));
+
+export const projectCliTokensRelations = relations(projectCliTokens, ({ one }) => ({
+  project: one(projects, { fields: [projectCliTokens.projectId], references: [projects.id] }),
+  user: one(users, { fields: [projectCliTokens.userId], references: [users.id] }),
 }));

@@ -80,7 +80,7 @@ export class LightLatexClient {
     return this.request("DELETE", `/projects/${id}/files/${filePath}`);
   }
 
-  async sync(id: string, files: Array<{ path: string; content: string; hash: string }>) {
+  async sync(id: string, files: Array<{ path: string; content: string; hash: string; baseHash?: string }>) {
     return this.request("POST", `/projects/${id}/sync`, files);
   }
 

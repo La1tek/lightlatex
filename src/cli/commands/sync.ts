@@ -79,7 +79,11 @@ export async function sync(): Promise<void> {
       for (const p of result.pushed) console.log(`  ↑ ${p}`);
     }
     if (result.conflicts && result.conflicts.length > 0) {
-      for (const c of result.conflicts) console.log(`  ⚠ Conflict (local wins): ${c}`);
+      for (const c of result.conflicts) {
+        const filePath = typeof c === "string" ? c : c.path;
+        const detail = typeof c === "string" ? "local wins" : `remote ${c.remoteHash?.slice(0, 8) || "unknown"} / local ${c.localHash?.slice(0, 8) || "unknown"}`;
+        console.log(`  ⚠ Conflict (${detail}): ${filePath}`);
+      }
     }
 
     const total = (result.pushed?.length || 0) + (result.pulled?.length || 0);

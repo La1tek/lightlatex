@@ -31,6 +31,16 @@ async function request(method, path, body, token = accessToken) {
   return payload;
 }
 
+async function expectRequestError(method, path, body, expectedStatus, token = accessToken) {
+  try {
+    await request(method, path, body, token);
+  } catch (err) {
+    assert(err.message.includes(`-> ${expectedStatus}:`), `Expected ${expectedStatus} for ${method} ${path}, got ${err.message}`);
+    return;
+  }
+  throw new Error(`Expected ${method} ${path} to fail with ${expectedStatus}`);
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -72,8 +82,23 @@ async function main() {
   const detail = await request('GET', `/projects/${project.id}`);
   assert(detail.accessRole === 'owner', 'Project detail access role mismatch');
 
+  const cliTokenPayload = await request('POST', `/projects/${project.id}/cli-token/regenerate`, {});
+  assert(cliTokenPayload.token?.startsWith('ltx_'), 'CLI token missing or malformed');
+  const cliTokenMeta = await request('GET', `/projects/${project.id}/cli-token`);
+  assert(cliTokenMeta.tokenPrefix === cliTokenPayload.tokenPrefix, 'CLI token metadata prefix mismatch');
+
   const files = await request('GET', `/projects/${project.id}/files`);
   assert(files.some((file) => file.path === 'main.tex'), 'Template did not create main.tex');
+
+  const cliFiles = await request('GET', `/projects/${project.id}/files`, undefined, cliTokenPayload.token);
+  assert(cliFiles.some((file) => file.path === 'main.tex'), 'CLI token could not access scoped project files');
+
+  const otherProject = await request('POST', '/projects', {
+    name: `Smoke Other ${runId}`,
+    compiler: 'pdflatex',
+    template: 'article',
+  });
+  await expectRequestError('GET', `/projects/${otherProject.id}/files`, undefined, 403, cliTokenPayload.token);
 
   const source = await request('GET', `/projects/${project.id}/files/main.tex`);
   assert(source.includes('\\documentclass'), 'main.tex does not look like LaTeX source');
@@ -115,6 +140,9 @@ async function main() {
   await request('DELETE', `/projects/${project.id}/collaborators/${addedCollaborator.id}`);
   const collaboratorsAfterRemove = await request('GET', `/projects/${project.id}/collaborators`);
   assert(!collaboratorsAfterRemove.collaborators.some((item) => item.id === addedCollaborator.id), 'Collaborator was not removed');
+
+  await request('DELETE', `/projects/${project.id}/cli-token`);
+  await expectRequestError('GET', `/projects/${project.id}/files`, undefined, 401, cliTokenPayload.token);
 
   const hashes = await request('GET', `/projects/${project.id}/files-with-hashes`);
   assert(hashes.some((file) => file.path === 'main.tex' && file.hash), 'File hash for main.tex missing');
