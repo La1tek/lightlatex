@@ -32,18 +32,21 @@
         </div>
         <div class="editor-main">
           <div class="sidebar">
-            <div class="sidebar-header">
-              <span>FILES</span>
-            </div>
             <div class="sidebar-tabs">
-              <button class="sidebar-tab active" data-tab="files">Files</button>
+              <button class="sidebar-tab active" data-tab="files">${Icons.folderOpen} Files</button>
               <button class="sidebar-tab" data-tab="outline">${Icons.outline16} Outline</button>
               <button class="sidebar-tab" data-tab="refs">${Icons.link16} Refs</button>
               <button class="sidebar-tab" data-tab="todo">${Icons.todo16} TODO</button>
             </div>
             <div class="sidebar-file-actions" id="sidebar-file-actions">
               <button class="btn btn-secondary btn-small" id="new-file-btn" type="button" title="New file">${Icons.plus16} New file</button>
-              <button class="btn btn-secondary btn-small" id="upload-image-btn" type="button" title="Upload image or PDF asset">${Icons.upload16} Upload</button>
+              <div class="sidebar-upload-menu" id="sidebar-upload-menu">
+                <button class="btn btn-secondary btn-small" id="upload-image-btn" type="button" title="Upload assets or folder" aria-expanded="false" aria-controls="sidebar-upload-popover">${Icons.upload16} Upload</button>
+                <div class="sidebar-upload-popover" id="sidebar-upload-popover" hidden>
+                  <button type="button" data-upload-action="assets">${Icons.image16}<span>Images / PDF</span></button>
+                  <button type="button" data-upload-action="folder">${Icons.folderOpen}<span>Folder</span></button>
+                </div>
+              </div>
             </div>
             <div class="tree-container" id="file-tree"></div>
             <div class="recent-files-panel" id="recent-files-panel"></div>
@@ -91,6 +94,7 @@
               <div class="editor-tab active" id="current-file-tab">${Icons.fileTex} No file</div>
             </div>
             <div class="editor-container" id="monaco-editor"></div>
+            <div class="file-preview-panel hidden" id="file-preview-panel" aria-live="polite"></div>
           </div>
           <div class="preview-pane" id="preview-pane">
             <div class="preview-header">
@@ -104,7 +108,7 @@
                 <button class="btn-icon" id="pdf-refresh" title="Refresh PDF" aria-label="Refresh PDF">${Icons.sync16}</button>
                 <button class="btn-icon" id="pdf-copy-link" title="Copy PDF endpoint" aria-label="Copy PDF endpoint">${Icons.link16}</button>
                 <button class="btn-icon" id="pdf-zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
-                <span class="pdf-zoom-label" id="pdf-zoom-label">Fit</span>
+                <button class="pdf-zoom-label" id="pdf-zoom-label" type="button" title="Reset PDF zoom to fit width">Fit</button>
                 <button class="btn-icon" id="pdf-zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
               </div>
             </div>
@@ -228,7 +232,6 @@
         const tabName = tab.dataset.tab;
         document.getElementById('file-tree').style.display = tabName === 'files' ? '' : 'none';
         document.getElementById('sidebar-file-actions').style.display = tabName === 'files' ? '' : 'none';
-        document.querySelector('.sidebar-header').style.display = tabName === 'files' ? '' : 'none';
         document.getElementById('outline-panel').style.display = tabName === 'outline' ? '' : 'none';
         document.getElementById('refs-panel').style.display = tabName === 'refs' ? '' : 'none';
         document.getElementById('todo-panel').style.display = tabName === 'todo' ? '' : 'none';
@@ -274,6 +277,7 @@
       }
     });
     document.getElementById('pdf-zoom-out').addEventListener('click', async () => { await Preview.zoomOut(); app.updatePdfPageInfo(); });
+    document.getElementById('pdf-zoom-label').addEventListener('click', async () => { await Preview.setZoom('fit-width'); app.updatePdfPageInfo(); });
     document.getElementById('pdf-zoom-in').addEventListener('click', async () => { await Preview.zoomIn(); app.updatePdfPageInfo(); });
     document.getElementById('compile-panel-close').addEventListener('click', () => app.closeCompilePanel());
     app.applyProjectPermissions();
@@ -394,14 +398,69 @@
 
   function bindAssetUpload(app) {
     const uploadImgBtn = document.getElementById('upload-image-btn');
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/png,image/jpeg,image/gif,image/svg+xml,application/pdf';
-    fileInput.multiple = true;
-    fileInput.style.display = 'none';
-    document.body.appendChild(fileInput);
-    uploadImgBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => app.uploadImages(fileInput.files));
+    const uploadMenu = document.getElementById('sidebar-upload-menu');
+    const uploadPopover = document.getElementById('sidebar-upload-popover');
+    const assetInput = document.createElement('input');
+    const folderInput = document.createElement('input');
+
+    assetInput.type = 'file';
+    assetInput.accept = 'image/png,image/jpeg,image/gif,image/svg+xml,image/webp,application/pdf';
+    assetInput.multiple = true;
+    assetInput.style.display = 'none';
+
+    folderInput.type = 'file';
+    folderInput.multiple = true;
+    folderInput.webkitdirectory = true;
+    folderInput.directory = true;
+    folderInput.setAttribute('webkitdirectory', '');
+    folderInput.setAttribute('directory', '');
+    folderInput.style.display = 'none';
+
+    document.body.appendChild(assetInput);
+    document.body.appendChild(folderInput);
+
+    const closeUploadMenu = () => {
+      if (!uploadPopover || !uploadImgBtn) return;
+      uploadPopover.hidden = true;
+      uploadImgBtn.setAttribute('aria-expanded', 'false');
+    };
+
+    const toggleUploadMenu = () => {
+      if (!uploadPopover || !uploadImgBtn) return;
+      const nextOpen = uploadPopover.hidden;
+      uploadPopover.hidden = !nextOpen;
+      uploadImgBtn.setAttribute('aria-expanded', String(nextOpen));
+    };
+
+    uploadImgBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (!app.ensureCanEdit('upload assets')) return;
+      toggleUploadMenu();
+    });
+
+    uploadPopover?.querySelector('[data-upload-action="assets"]')?.addEventListener('click', () => {
+      closeUploadMenu();
+      assetInput.click();
+    });
+    uploadPopover?.querySelector('[data-upload-action="folder"]')?.addEventListener('click', () => {
+      closeUploadMenu();
+      folderInput.click();
+    });
+
+    assetInput.addEventListener('change', async () => {
+      await app.uploadImages(assetInput.files);
+      assetInput.value = '';
+    });
+    folderInput.addEventListener('change', async () => {
+      await app.uploadFolder(folderInput.files);
+      folderInput.value = '';
+    });
+    document.addEventListener('click', (event) => {
+      if (!uploadMenu?.contains(event.target)) closeUploadMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeUploadMenu();
+    });
     document.getElementById('asset-manager-btn').addEventListener('click', () => app.showAssetManager());
   }
 

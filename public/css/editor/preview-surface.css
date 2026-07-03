@@ -28,11 +28,25 @@
 }
 
 .pdf-zoom-label {
+  min-height: 28px;
   min-width: 44px;
+  padding: 0 var(--space-6);
+  border: 1px solid transparent;
+  border-radius: var(--radius-4);
+  background: transparent;
   color: var(--text-secondary);
+  cursor: pointer;
   font-family: var(--font-code);
   font-size: var(--text-11);
   text-align: center;
+}
+
+.pdf-zoom-label:hover,
+.pdf-zoom-label:focus-visible {
+  outline: none;
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 .preview-container {
@@ -43,7 +57,7 @@
   gap: var(--space-20);
   padding: var(--space-24);
   overscroll-behavior: contain;
-  touch-action: pan-x pan-y;
+  touch-action: none;
   background:
     linear-gradient(45deg, rgba(148, 163, 184, 0.10) 25%, transparent 25%),
     linear-gradient(-45deg, rgba(148, 163, 184, 0.10) 25%, transparent 25%),

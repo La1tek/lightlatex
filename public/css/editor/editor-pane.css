@@ -147,6 +147,100 @@
   overflow: hidden;
 }
 
+.editor-container.hidden,
+.file-preview-panel.hidden {
+  display: none;
+}
+
+.file-preview-panel {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-editor);
+  overflow: hidden;
+}
+
+.file-preview-toolbar {
+  min-height: 40px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-6) var(--space-10);
+  border-bottom: var(--panel-border);
+  background: var(--bg-secondary);
+}
+
+.file-preview-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  color: var(--text-primary);
+  font-family: var(--font-code);
+  font-size: var(--text-12);
+  font-weight: 600;
+}
+
+.file-preview-title span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-preview-icon,
+.file-preview-icon svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.file-preview-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.file-preview-stage {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--space-24);
+  overflow: auto;
+  background:
+    linear-gradient(45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+    var(--bg-preview);
+  background-size: 24px 24px;
+}
+
+.file-preview-stage img {
+  display: block;
+  max-width: min(100%, 980px);
+  max-height: 100%;
+  border: var(--panel-border);
+  border-radius: var(--radius-6);
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+  object-fit: contain;
+}
+
+.file-preview-pdf {
+  width: min(100%, 980px);
+  height: min(100%, 1120px);
+  min-height: 520px;
+  border: var(--panel-border);
+  border-radius: var(--radius-6);
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
 .editor-pane.drag-over {
   box-shadow: inset 0 0 0 2px var(--accent);
 }

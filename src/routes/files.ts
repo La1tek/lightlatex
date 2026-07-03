@@ -23,6 +23,7 @@ import {
   syncProjectFiles,
   updateProjectFile,
   uploadProjectAsset,
+  uploadProjectFile,
 } from "../services/files";
 
 const router = Router();
@@ -44,6 +45,17 @@ router.post("/:id/files", async (req: AuthRequest, res: Response) => {
     const file = await createProjectFile(p(req, "id"), req.userId!, req.body);
     res.status(201).json(file);
   } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+router.post("/:id/files/upload", upload.single("file"), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    const filePath = String(req.body?.path || "");
+    res.status(201).json(await uploadProjectFile(p(req, "id"), req.userId!, req.file, filePath));
+  } catch (err: any) {
+    if (req.file) await fs.unlink(req.file.path).catch(() => {});
     sendError(res, err);
   }
 });

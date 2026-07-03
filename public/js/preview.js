@@ -14,6 +14,9 @@ let gestureChangeHandler = null;
 let gestureEndHandler = null;
 let lastGestureScale = 1;
 let renderGeneration = 0;
+let queuedZoomFactor = 1;
+let queuedZoomPoint = null;
+let zoomQueueTimer = null;
 
 const Preview = {
   init(containerEl) {
@@ -37,7 +40,7 @@ const Preview = {
       event.preventDefault();
       const direction = event.deltaY > 0 ? -1 : 1;
       const factor = direction > 0 ? 1.12 : 0.88;
-      this.zoomAt(event.clientX, event.clientY, factor);
+      this.queueZoomAt(event.clientX, event.clientY, factor);
     };
     gestureStartHandler = (event) => {
       if (!pdfDoc || !this.isEventInsidePreview(event)) return;
@@ -51,7 +54,7 @@ const Preview = {
       const factor = nextScale / Math.max(0.01, lastGestureScale);
       lastGestureScale = nextScale;
       if (Number.isFinite(factor) && Math.abs(factor - 1) > 0.015) {
-        this.zoomAt(event.clientX, event.clientY, factor);
+        this.queueZoomAt(event.clientX, event.clientY, factor);
       }
     };
     gestureEndHandler = () => {
@@ -89,8 +92,8 @@ const Preview = {
     const generation = ++renderGeneration;
     rendering = true;
 
+    const localPageElements = [];
     previewContainer.innerHTML = '';
-    pageElements = [];
 
     for (let i = 1; i <= totalPages; i++) {
       const pageWrapper = document.createElement('div');
@@ -116,12 +119,14 @@ const Preview = {
       pageWrapper.appendChild(pageSurface);
       pageWrapper.appendChild(pageLabel);
       previewContainer.appendChild(pageWrapper);
-      pageElements.push(pageWrapper);
+      localPageElements.push(pageWrapper);
     }
+    pageElements = localPageElements;
 
-    // Render each page
-    for (let i = 1; i <= totalPages; i++) {
-      try {
+    try {
+      // Render each page
+      for (let i = 1; i <= totalPages; i++) {
+        if (generation !== renderGeneration) return;
         const page = await pdfDoc.getPage(i);
         const baseViewport = page.getViewport({ scale: 1 });
         const visibleWidth = previewContainer.clientWidth
@@ -141,9 +146,10 @@ const Preview = {
         const viewport = page.getViewport({ scale });
         currentCssScale = scale;
 
-        const canvas = pageElements[i - 1].querySelector('canvas');
-        const surface = pageElements[i - 1].querySelector('.pdf-page-surface');
-        const textLayer = pageElements[i - 1].querySelector('.pdf-text-layer');
+        const pageElement = localPageElements[i - 1];
+        const canvas = pageElement.querySelector('canvas');
+        const surface = pageElement.querySelector('.pdf-page-surface');
+        const textLayer = pageElement.querySelector('.pdf-text-layer');
         const outputScale = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
         const pixelWidth = Math.floor(viewport.width * outputScale);
         const pixelHeight = Math.floor(viewport.height * outputScale);
@@ -151,7 +157,7 @@ const Preview = {
         canvas.height = pixelHeight;
         canvas.style.width = `${Math.round(viewport.width)}px`;
         canvas.style.height = `${Math.round(viewport.height)}px`;
-        pageElements[i - 1].style.width = `${Math.round(viewport.width)}px`;
+        pageElement.style.width = `${Math.round(viewport.width)}px`;
         surface.style.width = `${Math.round(viewport.width)}px`;
         surface.style.height = `${Math.round(viewport.height)}px`;
         textLayer.style.width = `${Math.round(viewport.width)}px`;
@@ -168,17 +174,14 @@ const Preview = {
           viewport,
           transform: outputScale === 1 ? null : [outputScale, 0, 0, outputScale, 0, 0],
         }).promise;
-        if (generation !== renderGeneration) {
-          rendering = false;
-          return;
-        }
+        if (generation !== renderGeneration) return;
         await this.renderTextLayer(page, viewport, textLayer);
-      } catch (err) {
-        // skip failed pages
       }
+    } catch (err) {
+      // Keep the preview usable even if one page fails to render.
+    } finally {
+      if (generation === renderGeneration) rendering = false;
     }
-
-    rendering = false;
   },
 
   async renderTextLayer(page, viewport, container) {
@@ -245,6 +248,19 @@ const Preview = {
     await this.renderAllPages();
   },
 
+  queueZoomAt(clientX, clientY, factor) {
+    queuedZoomPoint = { clientX, clientY };
+    queuedZoomFactor *= factor;
+    clearTimeout(zoomQueueTimer);
+    zoomQueueTimer = setTimeout(() => {
+      const point = queuedZoomPoint;
+      const nextFactor = queuedZoomFactor;
+      queuedZoomFactor = 1;
+      queuedZoomPoint = null;
+      if (point) this.zoomAt(point.clientX, point.clientY, nextFactor);
+    }, 40);
+  },
+
   isEventInsidePreview(event) {
     if (!previewContainer) return false;
     return previewContainer.contains(event.target);
@@ -270,7 +286,7 @@ const Preview = {
   },
 
   async zoomAt(clientX, clientY, factor) {
-    if (!pdfDoc || rendering) return;
+    if (!pdfDoc) return;
     const anchor = this.pageAnchorAt(clientX, clientY);
     const beforeScale = this.getCurrentScale();
     const nextScale = Math.min(4, Math.max(0.35, beforeScale * factor));

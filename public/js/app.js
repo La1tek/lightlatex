@@ -143,6 +143,10 @@ const App = {
     return LightTeXFeatures.assetManager.uploadImages(this, fileList);
   },
 
+  async uploadFolder(fileList) {
+    return LightTeXFeatures.assetManager.uploadFolder(this, fileList);
+  },
+
   async showAssetManager() {
     return LightTeXFeatures.assetManager.show(this);
   },

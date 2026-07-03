@@ -14,6 +14,7 @@ import {
   extractZipToProject,
   getProjectDir,
   getSnapshotFile,
+  isGeneratedOrInternal,
   listSnapshotDetails,
   listSnapshots,
   readFile,
@@ -25,7 +26,7 @@ import {
 } from "../storage/fs";
 import { syncFileRecords, upsertFileRecord } from "../storage/fileRegistry";
 
-const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/svg+xml", "application/pdf"]);
+const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp", "application/pdf"]);
 const CHECKPOINT_COOLDOWN_MS = 2 * 60 * 1000;
 const checkpointTimes = new Map<string, number>();
 
@@ -35,6 +36,7 @@ const MIME_TYPES: Record<string, string> = {
   jpeg: "image/jpeg",
   gif: "image/gif",
   svg: "image/svg+xml",
+  webp: "image/webp",
   pdf: "application/pdf",
 };
 
@@ -128,7 +130,7 @@ export async function getProjectZip(projectId: string, userId: string) {
 export async function uploadProjectAsset(projectId: string, userId: string, uploaded: UploadedFile) {
   await requireProjectAccess(projectId, userId, "editor");
   if (!ALLOWED_IMAGE_TYPES.has(uploaded.mimetype)) {
-    throw new HttpError("Unsupported file type. Allowed: png, jpg, gif, svg, pdf", 400);
+    throw new HttpError("Unsupported file type. Allowed: png, jpg, gif, svg, webp, pdf", 400);
   }
 
   const originalName = uploaded.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -141,6 +143,22 @@ export async function uploadProjectAsset(projectId: string, userId: string, uplo
   await upsertFileRecord(projectId, filePath);
 
   return { ok: true, path: filePath, name: originalName };
+}
+
+export async function uploadProjectFile(projectId: string, userId: string, uploaded: UploadedFile, filePath: string) {
+  await requireProjectAccess(projectId, userId, "editor");
+  if (!filePath) throw new HttpError("File path required", 400);
+
+  const normalizedPath = filePath.replace(/\\/g, "/").replace(/^\.?\//, "");
+  if (isGeneratedOrInternal(normalizedPath)) {
+    throw new HttpError("Cannot upload generated or internal project files", 400);
+  }
+  const destPath = resolveProjectPath(projectId, normalizedPath);
+  await ensureDir(path.dirname(destPath));
+  await moveUploadedFile(uploaded.path, destPath);
+  const file = await upsertFileRecord(projectId, normalizedPath);
+  scheduleCheckpoint(projectId, `Uploaded ${normalizedPath}`);
+  return file;
 }
 
 async function moveUploadedFile(sourcePath: string, destPath: string) {

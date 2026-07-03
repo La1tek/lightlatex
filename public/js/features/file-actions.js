@@ -1,28 +1,137 @@
 (function () {
   window.LightTeXFeatures = window.LightTeXFeatures || {};
 
+  const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp']);
+  const PDF_EXTENSIONS = new Set(['pdf']);
+
+  function fileExtension(path) {
+    return String(path || '').split('.').pop().toLowerCase();
+  }
+
+  function isPreviewFile(path) {
+    const ext = fileExtension(path);
+    return IMAGE_EXTENSIONS.has(ext) || PDF_EXTENSIONS.has(ext);
+  }
+
+  function fileIcon(path) {
+    const ext = fileExtension(path);
+    if (IMAGE_EXTENSIONS.has(ext)) return Icons.fileImage;
+    if (PDF_EXTENSIONS.has(ext)) return Icons.filePdf;
+    if (ext === 'bib') return Icons.fileBib;
+    if (ext === 'sty') return Icons.fileSty;
+    if (ext === 'tex') return Icons.fileTex;
+    return Icons.file;
+  }
+
+  function resetFilePreview(app) {
+    const editorEl = document.getElementById('monaco-editor');
+    const previewEl = document.getElementById('file-preview-panel');
+    if (app.filePreviewObjectUrl) {
+      URL.revokeObjectURL(app.filePreviewObjectUrl);
+      app.filePreviewObjectUrl = null;
+    }
+    if (editorEl) editorEl.classList.remove('hidden');
+    if (previewEl) {
+      previewEl.classList.add('hidden');
+      previewEl.innerHTML = '';
+    }
+    Editor.layout();
+  }
+
+  function showFilePreview(app, path, blob) {
+    const editorEl = document.getElementById('monaco-editor');
+    const previewEl = document.getElementById('file-preview-panel');
+    if (!previewEl) return;
+    if (app.filePreviewObjectUrl) URL.revokeObjectURL(app.filePreviewObjectUrl);
+    const url = URL.createObjectURL(blob);
+    app.filePreviewObjectUrl = url;
+    const ext = fileExtension(path);
+    const isImage = IMAGE_EXTENSIONS.has(ext);
+    const safePath = app.escapeHtml(path);
+
+    if (editorEl) editorEl.classList.add('hidden');
+    previewEl.classList.remove('hidden');
+    previewEl.innerHTML = `
+      <div class="file-preview-toolbar">
+        <div class="file-preview-title">
+          <span class="file-preview-icon">${isImage ? Icons.fileImage : Icons.filePdf}</span>
+          <span title="${safePath}">${safePath}</span>
+        </div>
+        <div class="file-preview-actions">
+          <button class="btn btn-secondary btn-small" type="button" data-preview-copy>${Icons.copy14} Copy path</button>
+          ${isImage && app.canEditProject() ? `<button class="btn btn-secondary btn-small" type="button" data-preview-insert>${Icons.plus16} Insert figure</button>` : ''}
+        </div>
+      </div>
+      <div class="file-preview-stage">
+        ${isImage
+          ? `<img src="${url}" alt="${safePath}">`
+          : `<iframe class="file-preview-pdf" src="${url}" title="${safePath}"></iframe>`}
+      </div>
+    `;
+
+    previewEl.querySelector('[data-preview-copy]')?.addEventListener('click', async () => {
+      try {
+        const copied = await LightTeXCore.clipboard.copyText(path);
+        if (!copied) throw new Error('Clipboard unavailable');
+        app.notify('File path copied', 'success');
+      } catch {
+        app.notify('Could not copy path automatically', 'error');
+      }
+    });
+    previewEl.querySelector('[data-preview-insert]')?.addEventListener('click', async () => {
+      if (app.lastTextFilePath && app.lastTextFilePath !== path) {
+        await app.openFile(app.lastTextFilePath);
+        Editor.insertText(`\\includegraphics[width=0.8\\textwidth]{${path}}`);
+        app.notify('Figure command inserted', 'success');
+        return;
+      }
+      try {
+        const copied = await LightTeXCore.clipboard.copyText(`\\includegraphics[width=0.8\\textwidth]{${path}}`);
+        if (!copied) throw new Error('Clipboard unavailable');
+        app.notify('Figure command copied', 'success');
+      } catch {
+        app.notify('Open a .tex file first, then insert the figure', 'info');
+      }
+    });
+  }
+
   async function openFile(app, path) {
     try {
-      const content = await fetch(`/api/projects/${app.currentProjectId}/files/${path}`, {
+      const safePath = app.encodeProjectPath(path);
+      const res = await fetch(`/api/projects/${app.currentProjectId}/files/${safePath}`, {
         headers: { 'Authorization': `Bearer ${api.token}` },
-      }).then(r => r.text());
+      });
+      if (!res.ok) throw new Error(`Could not open ${path}`);
 
       Editor.setContext(app.currentProjectId, path);
-      Editor.setValue(content, { silent: true });
+      if (isPreviewFile(path)) {
+        const blob = await res.blob();
+        showFilePreview(app, path, blob);
+      } else {
+        resetFilePreview(app);
+        const content = await res.text();
+        Editor.setValue(content, { silent: true });
+        Editor.setCompileErrors([], path);
+        app.lastTextFilePath = path;
+        app.updateWordCount();
+        app.queueStructureRefresh();
+      }
       const currentFileTab = document.getElementById('current-file-tab');
       if (currentFileTab) {
-        currentFileTab.innerHTML = `${Icons.fileTex} ${app.escapeHtml(path)}`;
+        currentFileTab.innerHTML = `${fileIcon(path)} ${app.escapeHtml(path)}`;
       }
       const saveState = document.getElementById('save-state');
-      if (saveState) saveState.textContent = 'Saved';
+      if (saveState) saveState.textContent = isPreviewFile(path) ? 'Preview' : 'Saved';
       app.fileTree.selectFile(path);
       recordRecentFile(app, path);
       renderRecentFiles(app);
-      Editor.setCompileErrors([], path);
-      app.updateWordCount();
-      app.queueStructureRefresh();
+      if (isPreviewFile(path)) {
+        const wordCount = document.getElementById('word-count');
+        if (wordCount) wordCount.textContent = `${fileExtension(path).toUpperCase()} asset`;
+      }
     } catch (err) {
       console.error('Failed to open file:', err);
+      app.notify('Could not open file: ' + err.message, 'error');
     }
   }
 
@@ -129,7 +238,7 @@
       <div class="recent-files-list">
         ${recent.map((path) => `
           <button class="recent-file-btn ${path === Editor.currentFilePath ? 'active' : ''}" type="button" data-recent-file="${app.escapeHtml(path)}" title="${app.escapeHtml(path)}">
-            ${Icons.fileTex} <span>${app.escapeHtml(path)}</span>
+            ${fileIcon(path)} <span>${app.escapeHtml(path)}</span>
           </button>
         `).join('')}
       </div>
@@ -144,7 +253,7 @@
     if (!confirm(`Delete "${path}"?`)) return;
 
     try {
-      await api.del(`/projects/${app.currentProjectId}/files/${path}`);
+      await api.del(`/projects/${app.currentProjectId}/files/${app.encodeProjectPath(path)}`);
       app.projectFiles = app.projectFiles.filter(f => f.path !== path);
       app.fileTree.setFiles(app.projectFiles);
       app.refreshFileHashes();
@@ -153,6 +262,7 @@
         if (app.projectFiles.length > 0) {
           app.openFile(app.projectFiles[0].path);
         } else {
+          resetFilePreview(app);
           Editor.setValue('', { silent: true });
           Editor.setContext(null, null);
         }

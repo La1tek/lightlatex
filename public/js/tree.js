@@ -11,6 +11,8 @@ class FileTree {
     this.devMode = options.devMode || false;
     this.readOnly = options.readOnly || false;
     this.selectedPath = null;
+    this.thumbnailUrls = [];
+    this.renderGeneration = 0;
   }
 
   setFiles(files) {
@@ -39,9 +41,18 @@ class FileTree {
   }
 
   render() {
+    const generation = ++this.renderGeneration;
+    this.revokeThumbnails();
     const tree = this.buildTree(this.files);
     this.container.innerHTML = '';
-    this.renderTree(tree, this.container, 0);
+    this.renderTree(tree, this.container, 0, generation);
+  }
+
+  revokeThumbnails() {
+    for (const url of this.thumbnailUrls) {
+      URL.revokeObjectURL(url);
+    }
+    this.thumbnailUrls = [];
   }
 
   buildTree(files) {
@@ -85,7 +96,7 @@ class FileTree {
       case 'bib': return Icons.fileBib;
       case 'sty': return Icons.fileSty;
       case 'pdf': return Icons.filePdf;
-      case 'png': case 'jpg': case 'jpeg': case 'gif': case 'svg': return Icons.fileImage;
+      case 'png': case 'jpg': case 'jpeg': case 'gif': case 'svg': case 'webp': return Icons.fileImage;
       default: return Icons.file;
     }
   }
@@ -99,7 +110,33 @@ class FileTree {
       .replace(/'/g, '&#39;');
   }
 
-  renderTree(node, parent, depth) {
+  encodeProjectPath(filePath) {
+    return String(filePath || '').split('/').map(encodeURIComponent).join('/');
+  }
+
+  async loadThumbnail(img, filePath, generation) {
+    try {
+      const res = await fetch(`/api/projects/${this.projectId}/files/${this.encodeProjectPath(filePath)}`, {
+        headers: api.token ? { 'Authorization': `Bearer ${api.token}` } : {},
+      });
+      if (!res.ok) {
+        img.remove();
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (generation !== this.renderGeneration || !img.isConnected) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      this.thumbnailUrls.push(url);
+      img.src = url;
+    } catch {
+      img.remove();
+    }
+  }
+
+  renderTree(node, parent, depth, generation) {
     const entries = Object.entries(node.children).sort(([aName, aNode], [bName, bNode]) => {
       if (aNode.file && !bNode.file) return 1;
       if (!aNode.file && bNode.file) return -1;
@@ -115,7 +152,7 @@ class FileTree {
 
       if (child.file) {
         const ext = name.split('.').pop().toLowerCase();
-        const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext);
+        const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext);
         const icon = this.getFileIcon(name);
 
         const safePath = this.escapeHtml(child.file.path);
@@ -161,10 +198,10 @@ class FileTree {
         if (isImage && this.projectId) {
           const thumb = document.createElement('img');
           thumb.className = 'file-thumbnail';
-          thumb.src = `/api/projects/${this.projectId}/files/${child.file.path}`;
           thumb.loading = 'lazy';
           thumb.onerror = () => thumb.remove();
           el.appendChild(thumb);
+          this.loadThumbnail(thumb, child.file.path, generation);
         }
 
         el.addEventListener('click', (e) => {
@@ -204,7 +241,7 @@ class FileTree {
       parent.appendChild(el);
 
       if (!child.file) {
-        this.renderTree(child, parent, depth + 1);
+        this.renderTree(child, parent, depth + 1, generation);
       }
     }
   }

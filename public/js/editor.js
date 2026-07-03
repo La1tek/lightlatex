@@ -327,7 +327,10 @@ const Editor = {
   async autosave() {
     if (readOnlyMode || !currentProjectId || !currentFilePath || !editor) return;
     try {
-      await api.put(`/projects/${currentProjectId}/files/${currentFilePath}`, {
+      const safePath = window.LightTeXCore?.path?.encodeProjectPath
+        ? window.LightTeXCore.path.encodeProjectPath(currentFilePath)
+        : String(currentFilePath).split('/').map(encodeURIComponent).join('/');
+      await api.put(`/projects/${currentProjectId}/files/${safePath}`, {
         content: this.getValue(),
       });
     } catch (err) {

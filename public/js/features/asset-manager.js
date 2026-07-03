@@ -1,12 +1,46 @@
 (function () {
   window.LightTeXFeatures = window.LightTeXFeatures || {};
 
+  const ASSET_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp', 'application/pdf']);
+  const ASSET_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'pdf']);
+  const TEXT_EXTENSIONS = new Set([
+    'tex', 'bib', 'sty', 'cls', 'bst', 'txt', 'md', 'json', 'csv', 'tsv',
+    'yaml', 'yml', 'xml', 'html', 'css', 'js', 'mjs', 'cjs', 'log',
+  ]);
+
+  function fileExtension(name) {
+    return String(name || '').split('.').pop().toLowerCase();
+  }
+
+  function isAssetFile(file) {
+    const ext = fileExtension(file.name);
+    return ASSET_MIME_TYPES.has(file.type) || ASSET_EXTENSIONS.has(ext);
+  }
+
+  function isTextFile(file, path = file.name) {
+    const ext = fileExtension(path);
+    return TEXT_EXTENSIONS.has(ext) || String(file.type || '').startsWith('text/');
+  }
+
+  function folderRelativePath(file) {
+    const rawPath = file.webkitRelativePath || file.relativePath || file.name;
+    const normalized = LightTeXCore.path.normalizeProjectPath(rawPath);
+    const parts = normalized.split('/').filter(Boolean);
+    if (file.webkitRelativePath && parts.length > 1) parts.shift();
+    return parts.join('/');
+  }
+
+  function isSafeUploadPath(path) {
+    if (!path || path.startsWith('/') || path.includes('\0')) return false;
+    return !path.split('/').some((part) => !part || part === '.' || part === '..');
+  }
+
   async function uploadImages(app, fileList) {
     if (!app.ensureCanEdit('upload assets')) return;
     if (!fileList || fileList.length === 0) return;
-    const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'application/pdf'];
+    let uploaded = 0;
     for (const file of fileList) {
-      if (!allowed.includes(file.type)) {
+      if (!isAssetFile(file)) {
         app.notify(`Unsupported file type: ${file.name}`, 'error');
         continue;
       }
@@ -21,6 +55,7 @@
         });
         const result = await res.json();
         if (res.ok) {
+          uploaded += 1;
           app.notify(`Uploaded ${file.name}`, 'success');
           app.projectFiles = await api.get(`/projects/${app.currentProjectId}/files`);
           app.fileTree.setFiles(app.projectFiles);
@@ -34,6 +69,67 @@
         app.notify(`Upload error: ${err.message}`, 'error');
       }
     }
+    return uploaded;
+  }
+
+  async function uploadFolder(app, fileList) {
+    if (!app.ensureCanEdit('upload folders')) return;
+    if (!fileList || fileList.length === 0) return;
+
+    let textCount = 0;
+    let assetCount = 0;
+    let skippedCount = 0;
+    let lastTextPath = null;
+
+    for (const file of fileList) {
+      const relativePath = folderRelativePath(file);
+      if (!isSafeUploadPath(relativePath)) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const assetFile = isAssetFile(file);
+      const textFile = isTextFile(file, relativePath);
+      if (!assetFile && !textFile) {
+        skippedCount += 1;
+        continue;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('path', relativePath);
+        const res = await fetch(`/api/projects/${app.currentProjectId}/files/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${api.token}` },
+          body: formData,
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(result.error || `Could not upload ${relativePath}`);
+        if (assetFile) assetCount += 1;
+        if (textFile) {
+          textCount += 1;
+          lastTextPath = relativePath;
+        }
+      } catch (err) {
+        skippedCount += 1;
+        app.notify(`Could not upload ${relativePath}: ${err.message}`, 'error');
+      }
+    }
+
+    app.projectFiles = await api.get(`/projects/${app.currentProjectId}/files`);
+    app.fileTree.setFiles(app.projectFiles);
+    app.refreshFileHashes();
+    app.imageFiles = await api.get(`/projects/${app.currentProjectId}/images`).catch(() => app.imageFiles || []);
+    Editor.setImageFiles(app.imageFiles);
+    if (app.projectFiles.some((file) => file.path.endsWith('.bib'))) app.refreshCitationCache();
+    if (lastTextPath) app.openFile(lastTextPath);
+    const summary = [
+      textCount ? `${textCount} text file${textCount === 1 ? '' : 's'}` : '',
+      assetCount ? `${assetCount} asset${assetCount === 1 ? '' : 's'}` : '',
+      skippedCount ? `${skippedCount} skipped` : '',
+    ].filter(Boolean).join(', ');
+    app.notify(summary ? `Folder upload complete: ${summary}` : 'No supported files found in folder', summary ? 'success' : 'info');
   }
 
   async function show(app) {
@@ -66,7 +162,7 @@
     const grid = overlay.querySelector('#asset-grid');
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/png,image/jpeg,image/gif,image/svg+xml,application/pdf';
+    input.accept = 'image/png,image/jpeg,image/gif,image/svg+xml,image/webp,application/pdf';
     input.multiple = true;
     input.style.display = 'none';
     overlay.appendChild(input);
@@ -82,7 +178,7 @@
           grid.innerHTML = `
             <div class="panel-empty asset-empty">
               <strong>No assets yet</strong>
-              <span>Upload PNG, JPG, SVG, GIF, or PDF files. They will be stored under images/.</span>
+              <span>Upload PNG, JPG, SVG, GIF, WebP, or PDF files. They will be stored under images/.</span>
             </div>
           `;
           return;
@@ -185,6 +281,7 @@
   window.LightTeXFeatures.assetManager = {
     loadPreview,
     show,
+    uploadFolder,
     uploadImages,
   };
 })();

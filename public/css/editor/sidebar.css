@@ -89,8 +89,70 @@
 }
 
 .sidebar-file-actions .btn {
+  width: 100%;
   min-width: 0;
   justify-content: center;
+}
+
+.sidebar-upload-menu {
+  position: relative;
+  min-width: 0;
+}
+
+.sidebar-upload-popover {
+  position: absolute;
+  top: calc(100% + var(--space-6));
+  right: 0;
+  width: min(210px, calc(100vw - 32px));
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: var(--panel-border);
+  border-radius: var(--radius-8);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-dropdown);
+}
+
+.sidebar-upload-popover[hidden] {
+  display: none;
+}
+
+.sidebar-upload-popover button {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-8);
+  border: 1px solid transparent;
+  border-radius: var(--radius-6);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-12);
+  font-weight: 600;
+  text-align: left;
+}
+
+.sidebar-upload-popover button:hover,
+.sidebar-upload-popover button:focus-visible {
+  outline: none;
+  border-color: var(--border-color);
+  background: var(--bg-hover);
+}
+
+.sidebar-upload-popover svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+}
+
+.sidebar-upload-popover span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-resizer {

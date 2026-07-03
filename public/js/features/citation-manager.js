@@ -95,7 +95,6 @@
         <div class="modal-heading-row">
           <div>
             <h2>Citations</h2>
-            <p class="modal-subtitle">Search \`.bib\` entries and insert citation commands.</p>
           </div>
           <button class="btn-icon" type="button" id="citation-close" title="Close citations" aria-label="Close citations">${Icons.x}</button>
         </div>
