@@ -1,371 +1,200 @@
 import { Router, Response } from "express";
-import { authMiddleware, AuthRequest } from "../auth/middleware";
-import { db } from "../db";
-import { files } from "../db/schema";
-import { eq, and } from "drizzle-orm";
-import { readFile, writeFile, deleteFile, extractZipToProject, zipProject, zipSnapshot, ensureDir, getProjectDir, createSnapshot, listSnapshots, listSnapshotDetails, getSnapshotFile, renameFile, resolveProjectPath } from "../storage/fs";
-import { syncFileRecords, upsertFileRecord } from "../storage/fileRegistry";
-import { ProjectAccessError, ProjectAccessRole, requireProjectAccess } from "../auth/projectAccess";
-import { p, pw } from "../utils";
 import multer from "multer";
 import fs from "fs/promises";
-import path from "path";
-import crypto from "crypto";
+import { ProjectAccessError } from "../auth/projectAccess";
+import { authMiddleware, AuthRequest } from "../auth/middleware";
+import { HttpError } from "../shared/errors";
+import { p, pw } from "../utils";
+import {
+  createProjectFile,
+  createProjectSnapshot,
+  deleteProjectFile,
+  getProjectFile,
+  getProjectSnapshotZip,
+  getProjectZip,
+  importProjectZip,
+  listProjectAssets,
+  listProjectFiles,
+  listProjectFilesWithHashes,
+  listProjectSnapshotDetails,
+  listProjectSnapshots,
+  readProjectSnapshotFile,
+  renameProjectFile,
+  syncProjectFiles,
+  updateProjectFile,
+  uploadProjectAsset,
+} from "../services/files";
 
 const router = Router();
 router.use(authMiddleware);
 
-async function verifyProject(projectId: string, userId: string, required: ProjectAccessRole = "viewer") {
-  const access = await requireProjectAccess(projectId, userId, required);
-  return access.project;
+function errorStatus(err: any, fallback = 400) {
+  if (err instanceof ProjectAccessError) return err.status;
+  if (err instanceof HttpError) return err.status;
+  if (err.message?.includes("not found")) return 404;
+  return fallback;
 }
 
-function projectErrorStatus(err: any) {
-  return err instanceof ProjectAccessError ? err.status : err.message?.includes("not found") ? 404 : 400;
+function sendError(res: Response, err: any, fallback = 400) {
+  res.status(errorStatus(err, fallback)).json({ error: err.message || "Request failed" });
 }
 
-// List files
+const upload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 50 * 1024 * 1024 } });
+const imageUpload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 20 * 1024 * 1024 } });
+
 router.get("/:id/files", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
-    const list = await db.select().from(files).where(eq(files.projectId, id));
-    res.json(list);
+    res.json(await listProjectFiles(p(req, "id"), req.userId!));
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// Create file
 router.post("/:id/files", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!, "editor");
-    const { path: filePath, content } = req.body;
-    if (!filePath) return res.status(400).json({ error: "File path required" });
-
-    await writeFile(id, filePath, content || "");
-    const file = await upsertFileRecord(id, filePath);
-
+    const file = await createProjectFile(p(req, "id"), req.userId!, req.body);
     res.status(201).json(file);
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// Get file content
 router.get("/:id/files/*", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
-    const filePath = pw(req);
-    if (!filePath) return res.status(400).json({ error: "File path required" });
-
-    const fullPath = resolveProjectPath(id, filePath);
-
-    // Detect binary vs text
-    const ext = (filePath.split('.').pop() || '').toLowerCase();
-    const binaryExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'pdf', 'zip']);
-    if (binaryExts.has(ext)) {
-      const mimeTypes: Record<string, string> = {
-        png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
-        gif: 'image/gif', svg: 'image/svg+xml', pdf: 'application/pdf',
-      };
-      const content = await fs.readFile(fullPath);
-      res.type(mimeTypes[ext] || 'application/octet-stream').send(content);
-    } else {
-      const content = await readFile(id, filePath);
-      res.type("text/plain").send(content);
-    }
+    const result = await getProjectFile(p(req, "id"), req.userId!, pw(req));
+    res.type(result.type).send(result.content);
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// Rename file. This must be declared before the generic PUT /:id/files/* route.
 router.put("/:id/files/rename", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!, "editor");
-    const { oldPath, newPath } = req.body;
-    if (!oldPath || !newPath) return res.status(400).json({ error: "oldPath and newPath required" });
-
-    await renameFile(id, oldPath, newPath);
-    await db.delete(files).where(and(eq(files.projectId, id), eq(files.path, oldPath)));
-    await upsertFileRecord(id, newPath);
-
+    await renameProjectFile(p(req, "id"), req.userId!, req.body);
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// Update file content
 router.put("/:id/files/*", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!, "editor");
-    const filePath = pw(req);
-    const { content } = req.body;
-    if (content === undefined) return res.status(400).json({ error: "Content required" });
-
-    await writeFile(id, filePath, content);
-    await upsertFileRecord(id, filePath);
-
+    await updateProjectFile(p(req, "id"), req.userId!, pw(req), req.body.content);
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// Delete file
 router.delete("/:id/files/*", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!, "editor");
-    const filePath = pw(req);
-
-    await deleteFile(id, filePath);
-    await db.delete(files)
-      .where(and(eq(files.projectId, id), eq(files.path, filePath)));
-
+    await deleteProjectFile(p(req, "id"), req.userId!, pw(req));
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
-
-// Upload zip
-const upload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 50 * 1024 * 1024 } });
 
 router.post("/:id/upload", upload.single("zip"), async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!, "editor");
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-
-    await extractZipToProject(id, req.file.path);
-    await syncFileRecords(id);
+    await importProjectZip(p(req, "id"), req.userId!, req.file.path);
     await fs.unlink(req.file.path);
-
     res.json({ ok: true });
   } catch (err: any) {
     if (req.file) await fs.unlink(req.file.path).catch(() => {});
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// Download project as zip
 router.get("/:id/download", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
-    const zipBuffer = await zipProject(id);
+    const zipBuffer = await getProjectZip(p(req, "id"), req.userId!);
     res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", `attachment; filename="project.zip"`);
+    res.setHeader("Content-Disposition", 'attachment; filename="project.zip"');
     res.send(zipBuffer);
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// ===== Image upload =====
-const imageUpload = multer({ dest: "/tmp/lightlatex-uploads/", limits: { fileSize: 20 * 1024 * 1024 } });
-const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'application/pdf']);
-
-router.post("/:id/upload-image", imageUpload.single('image'), async (req: AuthRequest, res: Response) => {
+router.post("/:id/upload-image", imageUpload.single("image"), async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!, "editor");
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-    if (!ALLOWED_IMAGE_TYPES.has(req.file.mimetype)) {
-      await fs.unlink(req.file.path);
-      return res.status(400).json({ error: "Unsupported file type. Allowed: png, jpg, gif, svg, pdf" });
-    }
-
-    const originalName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const imagesDir = path.join(getProjectDir(id), 'images');
-    await ensureDir(imagesDir);
-    const destPath = path.join(imagesDir, originalName);
-    await fs.rename(req.file.path, destPath);
-
-    // Register in DB
-    const filePath = `images/${originalName}`;
-    await upsertFileRecord(id, filePath);
-
-    res.json({ ok: true, path: filePath, name: originalName });
+    res.json(await uploadProjectAsset(p(req, "id"), req.userId!, req.file));
   } catch (err: any) {
     if (req.file) await fs.unlink(req.file.path).catch(() => {});
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// List image files
 router.get("/:id/images", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
-    const imagesDir = path.join(getProjectDir(id), 'images');
-    const allFiles = await db.select().from(files).where(eq(files.projectId, id));
-    const imageList = allFiles
-      .filter(f => f.path.startsWith('images/'))
-      .map(f => ({ path: f.path, name: f.path.replace('images/', '') }));
-    res.json(imageList);
+    res.json(await listProjectAssets(p(req, "id"), req.userId!));
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// ===== Sync API for CLI =====
-// Get files with SHA256 hashes
 router.get("/:id/files-with-hashes", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
-    const list = await db.select().from(files).where(eq(files.projectId, id));
-    const result = [];
-    for (const f of list) {
-      try {
-        const content = await fs.readFile(resolveProjectPath(id, f.path));
-        const hash = crypto.createHash('sha256').update(content).digest('hex');
-        result.push({ path: f.path, hash, updatedAt: f.updatedAt });
-      } catch {
-        result.push({ path: f.path, hash: null, updatedAt: f.updatedAt });
-      }
-    }
-    res.json(result);
+    res.json(await listProjectFilesWithHashes(p(req, "id"), req.userId!));
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// Sync endpoint: accepts array of {path, content, hash}, returns diff
 router.post("/:id/sync", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!, "editor");
-    const clientFiles: Array<{path: string; content: string; hash: string}> = req.body;
-    if (!Array.isArray(clientFiles)) return res.status(400).json({ error: "Expected array of files" });
-
-    // Get server file hashes
-    const serverFiles = await db.select().from(files).where(eq(files.projectId, id));
-    const serverMap = new Map<string, { hash: string; updatedAt: Date }>();
-    for (const sf of serverFiles) {
-      try {
-        const content = await fs.readFile(resolveProjectPath(id, sf.path));
-        const hash = crypto.createHash('sha256').update(content).digest('hex');
-        serverMap.set(sf.path, { hash, updatedAt: sf.updatedAt });
-      } catch {
-        serverMap.set(sf.path, { hash: '', updatedAt: sf.updatedAt });
-      }
-    }
-
-    const pushed: string[] = [];
-    const pulled: Array<{path: string; hash: string}> = [];
-    const conflicts: string[] = [];
-
-    // Process client files
-    for (const cf of clientFiles) {
-      const server = serverMap.get(cf.path);
-      if (!server) {
-        // New file on client — push
-        await writeFile(id, cf.path, cf.content);
-        await upsertFileRecord(id, cf.path);
-        pushed.push(cf.path);
-      } else if (server.hash !== cf.hash) {
-        // Conflict — last-write-wins: client wins (client is pushing)
-        await writeFile(id, cf.path, cf.content);
-        await upsertFileRecord(id, cf.path);
-        conflicts.push(cf.path);
-        pushed.push(cf.path);
-      }
-      // else: same hash, no action
-    }
-
-    // Find files on server not on client
-    const clientPaths = new Set(clientFiles.map(f => f.path));
-    for (const [sp, info] of serverMap) {
-      if (!clientPaths.has(sp)) {
-        try {
-          const content = await fs.readFile(resolveProjectPath(id, sp), 'utf-8');
-          pulled.push({ path: sp, hash: info.hash, content } as any);
-        } catch {
-          pulled.push({ path: sp, hash: info.hash, content: '' } as any);
-        }
-      }
-    }
-
-    res.json({ pushed, pulled, conflicts });
+    res.json(await syncProjectFiles(p(req, "id"), req.userId!, req.body));
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-// ===== Snapshots / History =====
 router.get("/:id/history", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
-    const snapshots = await listSnapshots(id);
-    res.json(snapshots);
+    res.json(await listProjectSnapshots(p(req, "id"), req.userId!));
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
 router.get("/:id/history/details", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
-    const snapshots = await listSnapshotDetails(id);
-    res.json(snapshots);
+    res.json(await listProjectSnapshotDetails(p(req, "id"), req.userId!));
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
 router.post("/:id/history", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!, "editor");
-    const { name, message } = req.body || {};
-    const timestamp = await createSnapshot(id, {
-      type: "manual",
-      name: String(name || "Manual snapshot").trim(),
-      message: String(message || "").trim(),
-    });
-    res.status(201).json({ timestamp });
+    const snapshot = await createProjectSnapshot(p(req, "id"), req.userId!, req.body || {});
+    res.status(201).json(snapshot);
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
 router.get("/:id/history/:timestamp/download", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
     const timestamp = String(req.params.timestamp);
-    const zipBuffer = await zipSnapshot(id, timestamp);
+    const zipBuffer = await getProjectSnapshotZip(p(req, "id"), req.userId!, timestamp);
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="snapshot-${timestamp}.zip"`);
     res.send(zipBuffer);
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
 router.get("/:id/history/:timestamp/files/*", async (req: AuthRequest, res: Response) => {
   try {
-    const id = p(req, "id");
-    await verifyProject(id, req.userId!);
-    const timestamp = String(req.params.timestamp);
-    const filePath = pw(req);
-    if (!filePath) return res.status(400).json({ error: "File path required" });
-
-    const content = await getSnapshotFile(id, timestamp, filePath);
+    const content = await readProjectSnapshotFile(p(req, "id"), req.userId!, String(req.params.timestamp), pw(req));
     res.type("text/plain").send(content);
   } catch (err: any) {
-    res.status(projectErrorStatus(err)).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
