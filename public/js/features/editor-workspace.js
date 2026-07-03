@@ -23,6 +23,7 @@
           </div>
           <div class="editor-toolbar-right">
             <button class="sync-status synced" id="sync-status-btn" type="button" title="CLI sync status">${Icons.sync16} Synced</button>
+            <button class="btn btn-primary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
             <button class="btn btn-secondary btn-small" id="search-btn" title="Ctrl+Shift+F">${Icons.search16} Search</button>
             <button class="btn btn-secondary btn-small" id="comments-btn" title="Comments">${Icons.comment16} Comments</button>
             <button class="btn btn-secondary btn-small" id="symbols-btn" title="LaTeX symbols">${Icons.symbols16} Symbols</button>
@@ -33,7 +34,6 @@
             <button class="btn btn-secondary btn-small" id="settings-btn" title="Project settings">${Icons.settings} Settings</button>
             <button class="btn btn-secondary btn-small" id="autocompile-btn" title="Auto-compile">${Icons.autoCompile16} Auto</button>
             <button class="btn btn-secondary btn-small" id="preflight-btn" title="Run preflight check">${Icons.check14} Check</button>
-            <button class="btn btn-primary btn-small" id="compile-btn" title="Ctrl+S">${Icons.play16} Compile</button>
             <button class="btn btn-secondary btn-small" id="upload-image-btn" title="Upload image">${Icons.upload16} Image</button>
             <button class="btn btn-secondary btn-small" id="asset-manager-btn" title="Asset manager">${Icons.image16} Assets</button>
             <button class="btn btn-secondary btn-small" id="download-pdf-btn" title="Download PDF">${Icons.download16} PDF</button>
@@ -239,8 +239,7 @@
     document.getElementById('preflight-btn').addEventListener('click', () => app.showPreflightCheck());
     document.getElementById('toggle-theme-btn').addEventListener('click', () => app.toggleTheme());
     document.getElementById('editor-logout-btn').addEventListener('click', () => {
-      api.clearTokens();
-      window.location.hash = '#/login';
+      app.logout();
     });
     document.getElementById('new-file-btn').addEventListener('click', () => app.promptNewFile());
     document.getElementById('pdf-prev').addEventListener('click', () => { Preview.prevPage(); app.updatePdfPageInfo(); });

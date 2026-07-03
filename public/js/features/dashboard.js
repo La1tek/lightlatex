@@ -46,8 +46,7 @@
 
     document.getElementById('toggle-theme-btn').addEventListener('click', () => app.toggleTheme());
     document.getElementById('logout-btn').addEventListener('click', () => {
-      api.clearTokens();
-      window.location.hash = '#/login';
+      app.logout();
     });
     document.getElementById('new-project-btn').addEventListener('click', () => app.showNewProjectModal());
 

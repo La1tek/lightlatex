@@ -27,6 +27,15 @@ const App = {
     this.route();
   },
 
+  logout() {
+    api.clearTokens();
+    if (window.location.hash === '#/login') {
+      this.route();
+    } else {
+      window.location.hash = '#/login';
+    }
+  },
+
   route() {
     const hash = window.location.hash.slice(1) || '/';
     const app = document.getElementById('app');

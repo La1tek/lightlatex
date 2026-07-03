@@ -106,10 +106,20 @@ export async function runTrackedCompile(projectId: string, userId: string) {
 
       return { ...result, jobId: job.id, job: serializeJob(job) };
     } catch (err: any) {
+      const message = err?.message || "Compilation failed";
+      const result: CompileResult = {
+        success: false,
+        errors: [{ line: 0, message, severity: "error" }],
+        pdfGenerated: false,
+        log: message,
+      };
       job.status = controller.signal.aborted ? "cancelled" : "error";
       job.errorCount = 1;
-      job.message = err.message;
-      throw err;
+      job.warningCount = 0;
+      job.pdfGenerated = false;
+      job.message = message;
+      job.result = result;
+      return { ...result, jobId: job.id, job: serializeJob(job) };
     } finally {
       controllers.delete(job.id);
       job.finishedAt = new Date().toISOString();

@@ -23,11 +23,17 @@
 
       const result = await api.post(`/projects/${app.currentProjectId}/compile`);
       app.lastCompileJob = result.job || null;
-      const issues = Array.isArray(result.errors) ? result.errors : [];
+      let issues = Array.isArray(result.errors) ? result.errors : [];
+      if (issues.length === 0 && result.job?.message) {
+        issues = [{ line: 0, message: result.job.message, severity: 'error' }];
+      }
       const errors = issues.filter((e) => e.severity !== 'warning');
       const warnings = issues.filter((e) => e.severity === 'warning');
       app.lastCompileErrors = issues;
-      app.compileLog = result.log || '';
+      app.compileLog = result.log || result.job?.message || issues.map((issue) => {
+        const severity = issue.severity === 'warning' ? 'WARNING' : 'ERROR';
+        return `${severity} line ${issue.line || 0}: ${issue.message || 'Unknown compile issue'}`;
+      }).join('\n');
       renderCompilePanel(app, 'issues');
 
       if (result.success && result.pdfGenerated) {

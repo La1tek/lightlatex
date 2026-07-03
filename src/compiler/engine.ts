@@ -78,6 +78,9 @@ export async function compileProject(
       logContent = await fs.promises.readFile(logPath, "utf-8");
       parseLatexLog(logContent, errors);
     }
+    if (!logContent.trim()) {
+      logContent = result.output || errors.map((item) => `${item.severity.toUpperCase()} line ${item.line || 0}: ${item.message}`).join("\n");
+    }
 
     // Copy PDF back if generated
     const pdfPath = mainPath.replace(/\.tex$/, ".pdf");
@@ -119,11 +122,14 @@ function runCompiler(
   mainFile: string,
   errors: CompileError[],
   options: CompileOptions,
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; output: string }> {
   return new Promise((resolve) => {
     const texliveBin = "/usr/local/texlive/2026/bin/x86_64-linux";
     const envPath = `${texliveBin}:${process.env.PATH}`;
     let settled = false;
+    let stdout = "";
+    let stderr = "";
+    const output = () => [stdout, stderr].filter(Boolean).join("\n").trim();
 
     const proc = spawn(compiler, [
       "-interaction=nonstopmode",
@@ -135,7 +141,7 @@ function runCompiler(
       env: { ...process.env, PATH: envPath },
     });
 
-    let stderr = "";
+    proc.stdout.on("data", (data) => { stdout += data.toString(); });
     proc.stderr.on("data", (data) => { stderr += data.toString(); });
 
     const timer = setTimeout(() => {
@@ -143,7 +149,7 @@ function runCompiler(
       proc.kill("SIGKILL");
       errors.push({ line: 0, message: `Compilation timed out (${Math.round(config.quotas.compileTimeoutMs / 1000)}s)`, severity: "error" });
       settled = true;
-      resolve({ success: false });
+      resolve({ success: false, output: output() });
     }, config.quotas.compileTimeoutMs + 5000);
 
     const abortHandler = () => {
@@ -152,7 +158,7 @@ function runCompiler(
       errors.push({ line: 0, message: "Compilation cancelled", severity: "error" });
       settled = true;
       clearTimeout(timer);
-      resolve({ success: false });
+      resolve({ success: false, output: output() });
     };
     options.signal?.addEventListener("abort", abortHandler, { once: true });
 
@@ -165,7 +171,7 @@ function runCompiler(
       if (!success && !errors.some(e => e.severity === "error")) {
         errors.push({ line: 0, message: `Compiler exited with code ${code}`, severity: "error" });
       }
-      resolve({ success });
+      resolve({ success, output: output() });
     });
 
     proc.on("error", (err) => {
@@ -174,7 +180,7 @@ function runCompiler(
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", abortHandler);
       errors.push({ line: 0, message: `Failed to run ${compiler}: ${err.message}`, severity: "error" });
-      resolve({ success: false });
+      resolve({ success: false, output: output() || `Failed to run ${compiler}: ${err.message}` });
     });
   });
 }

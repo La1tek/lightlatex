@@ -6,6 +6,23 @@
   background: var(--bg-primary);
 }
 
+.admin-access-denied {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-24);
+  background: var(--bg-primary);
+}
+
+.admin-access-denied .empty-state {
+  max-width: 520px;
+  width: 100%;
+}
+
+.admin-access-denied .modal-actions {
+  justify-content: center;
+}
+
 .admin-sidebar {
   border-right: var(--panel-border);
   background: var(--bg-secondary);

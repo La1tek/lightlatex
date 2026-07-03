@@ -11,6 +11,16 @@ const Admin = {
   async load() {
     const app = document.getElementById('app');
     const theme = document.documentElement.dataset.theme;
+    let initialStats = null;
+
+    try {
+      initialStats = await api.get('/admin/stats');
+    } catch (err) {
+      if (this.isAdminOnlyError(err)) {
+        this.renderAccessDenied(app, theme);
+        return;
+      }
+    }
 
     app.innerHTML = `
       <div class="admin-layout">
@@ -110,10 +120,36 @@ const Admin = {
       }
     });
 
-    await this.loadStats();
+    await this.loadStats(initialStats);
     await this.loadHealth();
     await this.loadUsers();
     await this.loadAudit();
+  },
+
+  isAdminOnlyError(err) {
+    return /admin only|403|forbidden/i.test(err?.message || '');
+  },
+
+  renderAccessDenied(app, theme) {
+    app.innerHTML = `
+      <main class="admin-access-denied" role="alert">
+        <section class="empty-state">
+          <div class="icon">${Icons.lock}</div>
+          <h1>Admin access required</h1>
+          <p>This account can use projects, editor, CLI sync, and sharing, but admin stats, users, backups, and audit logs require an administrator account.</p>
+          <div class="modal-actions">
+            <a href="#/" class="btn btn-secondary">${Icons.backArrow16} Dashboard</a>
+            <button class="btn-icon" id="toggle-theme-btn" title="Toggle theme" aria-label="Toggle theme">${theme === 'dark' ? Icons.moon16 : Icons.sun16}</button>
+          </div>
+        </section>
+      </main>
+    `;
+    document.getElementById('toggle-theme-btn').addEventListener('click', () => {
+      const current = document.documentElement.dataset.theme;
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = next;
+      localStorage.setItem('theme', next);
+    });
   },
 
   escapeHtml(str) {
@@ -122,10 +158,10 @@ const Admin = {
     return div.innerHTML;
   },
 
-  async loadStats() {
+  async loadStats(preloadedStats = null) {
     const el = document.getElementById('admin-stats');
     try {
-      const stats = await api.get('/admin/stats');
+      const stats = preloadedStats || await api.get('/admin/stats');
       if (stats.error) {
         el.innerHTML = `<div class="empty-state"><p>${stats.error}</p></div>`;
         return;

@@ -16,6 +16,8 @@
   padding: 0 var(--space-8);
   background: var(--bg-secondary);
   border-bottom: var(--panel-border);
+  overflow: hidden;
+  position: relative;
   z-index: var(--z-sticky);
 }
 
@@ -33,13 +35,19 @@
 }
 
 .editor-toolbar-right {
-  justify-content: flex-end;
+  justify-content: flex-start;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
+  height: 100%;
 }
 
 .editor-toolbar-right::-webkit-scrollbar {
   display: none;
+}
+
+.editor-toolbar-right > * {
+  flex: 0 0 auto;
 }
 
 .editor-toolbar-left .project-name {
@@ -169,6 +177,7 @@
   display: grid;
   grid-template-columns: minmax(200px, var(--sidebar-width)) minmax(320px, 1fr) minmax(320px, 46vw);
   overflow: hidden;
+  position: relative;
 }
 
 .editor-main.editor-only,
